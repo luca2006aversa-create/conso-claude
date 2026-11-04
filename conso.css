@@ -1,0 +1,104 @@
+/* Page « Conso Claude » : reprend les jetons de style.css. */
+:root {
+  --grille: #e1e0d9;
+  --axe: #c3c2b7;
+  --muet: #898781;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --grille: #2c2c2a; --axe: #383835; }
+}
+
+.maj { color: var(--encre-3); font-size: 13px; margin-left: auto; }
+.conso { max-width: 1240px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+.vide { color: var(--encre-3); text-align: center; padding: 40px 0; }
+
+.c-bloc { background: var(--surface); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 14px 16px 12px; box-shadow: var(--ombre); min-width: 0; }
+.c-bloc h2 { font-size: 15px; margin: 0 0 2px; font-weight: 650; }
+.c-bloc .sous { color: var(--encre-2); font-size: 13px; margin: 0 0 10px; }
+.c-bloc-tete { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.c-bloc-tete > div:first-child { flex: 1; min-width: 180px; }
+
+.rangee-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 860px) { .rangee-2 { grid-template-columns: 1fr; } }
+
+/* Chiffres clés */
+.tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.tuile { background: var(--surface); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 12px 14px; box-shadow: var(--ombre); }
+.tuile .lib { font-size: 12.5px; color: var(--encre-2); }
+.tuile .valeur { font-size: 28px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.2; margin: 2px 0; }
+.tuile .valeur small { font-size: 14px; font-weight: 500; color: var(--encre-2); }
+.tuile .detail { font-size: 12.5px; color: var(--encre-2); }
+.tuile .parts { margin-top: 6px; display: grid; gap: 2px; font-size: 12.5px; }
+.monte { color: #006300; } .baisse { color: #b0362f; }
+@media (prefers-color-scheme: dark) { .monte { color: #3fbf3f; } .baisse { color: #e66767; } }
+
+/* Pastilles de couleur des comptes */
+.point { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.c-leg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--encre-2); margin: 2px 0 6px; }
+.c-leg .tiret { display: inline-block; width: 14px; border-top: 2px dashed var(--encre-2); margin-right: 6px; vertical-align: 3px; }
+
+/* Sélecteur de période */
+.segment { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--trait); border-radius: 8px; padding: 2px; }
+.segment button { border: 0; background: none; padding: 3px 10px; border-radius: 6px; cursor: pointer; color: var(--encre-2); font-size: 13px; }
+.segment button.actif { background: var(--surface); color: var(--encre); box-shadow: var(--ombre); font-weight: 600; }
+
+/* Graphiques */
+.graphe { width: 100%; }
+.graphe svg { display: block; overflow: visible; }
+.graphe text { fill: var(--muet); font-size: 11px; font-variant-numeric: tabular-nums; }
+.graphe .grille { stroke: var(--grille); stroke-width: 1; }
+.graphe .axe { stroke: var(--axe); stroke-width: 1; }
+.graphe .curseur { stroke: var(--encre-3); stroke-width: 1; pointer-events: none; }
+.defile { overflow-x: auto; padding-bottom: 4px; }
+
+/* Calendrier d'activité */
+.cal rect.vide-j { fill: var(--surface-2); stroke: var(--trait); stroke-width: 1; }
+.cal rect.cellule:hover, .chaleur rect:hover { stroke: var(--encre); stroke-width: 1.5; }
+.echelle { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--encre-2); justify-content: flex-end; margin-top: 6px; }
+.echelle i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+
+/* Limites */
+.limites { display: grid; gap: 12px; }
+.limite .tete { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; flex-wrap: wrap; }
+.limite .tete b { font-variant-numeric: tabular-nums; }
+.jauge { height: 10px; background: var(--surface-2); border: 1px solid var(--trait); border-radius: 6px; position: relative; margin: 4px 0 2px; overflow: hidden; }
+.jauge span { position: absolute; inset: 0 auto 0 0; border-radius: 6px 4px 4px 6px; }
+.jauge em { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--encre); }
+.limite .pied { font-size: 12.5px; color: var(--encre-2); }
+
+/* Tableau */
+details.tableau summary { cursor: pointer; color: var(--encre-2); font-size: 13px; margin-top: 8px; }
+details.tableau table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+details.tableau th, details.tableau td { padding: 4px 8px; border-bottom: 1px solid var(--trait); text-align: right; }
+details.tableau th:first-child, details.tableau td:first-child { text-align: left; }
+.table-defile { max-height: 340px; overflow: auto; }
+
+/* Réglages des comptes */
+.compte-ligne { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--trait); }
+.compte-ligne input[type=text] { padding: 5px 8px; border: 1px solid var(--trait-fort); border-radius: 7px; background: var(--surface); width: 170px; }
+.compte-ligne .mail { color: var(--encre-2); font-size: 13px; }
+.choix-couleur { display: inline-flex; gap: 4px; }
+.choix-couleur button { width: 20px; height: 20px; border-radius: 5px; border: 2px solid transparent; cursor: pointer; }
+.choix-couleur button.actif { border-color: var(--encre); }
+.frise { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; font-size: 13.5px; }
+.frise li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.frise .src { color: var(--encre-3); font-size: 12px; }
+.lien-btn { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 13px; }
+.form-ligne { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.form-ligne input, .form-ligne select { padding: 5px 8px; border: 1px solid var(--trait-fort); border-radius: 7px; background: var(--surface); }
+.aide { color: var(--encre-2); font-size: 13.5px; line-height: 1.5; }
+.aide p { margin: 6px 0; }
+
+/* Infobulle */
+.infobulle { position: fixed; z-index: 20; pointer-events: none; background: var(--surface); color: var(--encre); border: 1px solid var(--trait-fort); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0, 0, 0, .14); max-width: 260px; line-height: 1.45; }
+.infobulle b { font-weight: 650; }
+.infobulle .l { display: flex; justify-content: space-between; gap: 14px; font-variant-numeric: tabular-nums; }
+
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--encre); color: var(--fond); padding: 8px 14px; border-radius: 8px; font-size: 14px; z-index: 30; }
+
+/* Un jour, heure par heure */
+.nav-jour { display: flex; gap: 6px; align-items: center; }
+.nav-jour .bouton { padding: 4px 10px; }
+.nav-jour input { padding: 4px 8px; border: 1px solid var(--trait-fort); border-radius: 7px; background: var(--surface); }
+.astuce { color: var(--encre-3); font-size: 12.5px; margin: 6px 0 0; }
+#jour-resume { line-height: 1.6; }
