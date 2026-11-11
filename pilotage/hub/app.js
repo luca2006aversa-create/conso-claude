@@ -5,7 +5,7 @@
 const H = window.H = {
   d: null,                 // toutes les données (/api/hub/tout)
   vues: {},                // id -> { nom, icone, rendre(onglet), apres(onglet), plein, vivant, pastille() }
-  ordre: ['Le site', 'cockpit', 'argent', 'clients', 'serveurs', 'extractions', 'Le travail', 'taches', 'atelier', 'conso'],
+  ordre: ['Le site', 'cockpit', 'argent', 'clients', 'serveurs', 'extractions', 'Le travail', 'taches', 'atelier', 'conso', 'Projet à part', 'atlas'],
   enLigne: !!(window.HUB_CONFIG && window.HUB_CONFIG.url),
   charge: 0,               // heure du dernier chargement réussi
   etat: {},                // ce que les vues veulent garder d'un affichage à l'autre (globe, curseurs, filtres)
@@ -101,6 +101,7 @@ const ICONES = {
   extractions: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
   taches: '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/>',
   atelier: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10M18 11c0 4-6 3-12 5"/>',
+  atlas: '<circle cx="12" cy="12" r="5.5"/><path d="M3.2 15.6c-1.6 1.6.4 3.1 4.6 2.1 3.4-.8 7.4-2.9 10.4-5.4 3.2-2.7 4.4-5.2 2.6-5.9-.8-.3-2 0-3.4.6"/>',
   conso: '<path d="M12 3a9 9 0 109 9h-9z"/><path d="M15 3.5A9 9 0 0120.5 9H15z"/>',
 };
 
