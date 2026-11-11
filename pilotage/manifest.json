@@ -1,0 +1,26 @@
+{
+  "name": "Ašru · Pilotage",
+  "short_name": "Pilotage",
+  "description": "Le hub du site Ašru : cockpit, argent, clients, serveurs, extractions, atelier, conso.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#131416",
+  "theme_color": "#131416",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "icone-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icone-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
