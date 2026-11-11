@@ -147,6 +147,25 @@ H.recharger = async (silencieux = false) => {
   catch (e) { if (!silencieux) H.toast(e.message, true); return false; }
 };
 
+// Écran d'accueil sans jeton : coller le lien du téléphone (ou le jeton seul). Rien ne part ailleurs que dans ce téléphone.
+H.demanderLien = (main, message) => {
+  document.querySelector('aside').style.display = 'none';
+  main.innerHTML = `<div class="carte" style="max-width:440px;margin:12vh auto 0;text-align:center;padding:28px 24px">
+    <img src="icone-hub-192.png" alt="" width="84" height="84" style="border-radius:20px;margin-bottom:10px">
+    <h1 style="margin:0 0 6px">Pilotage</h1>
+    <div class="sous" style="margin-bottom:18px">${G.esc(/refus/i.test(message) ? 'Ce lien ne marche plus.' : 'Première ouverture sur ce téléphone.')} Colle le lien que tu as reçu (celui avec #k=…).</div>
+    <form id="coller-lien" style="display:grid;gap:10px"><input class="champ" name="lien" placeholder="Colle le lien ici" autocomplete="off" style="text-align:center;padding:10px">
+      <button class="btn p" type="submit" style="justify-content:center;padding:10px">Ouvrir</button></form></div>`;
+  const f = document.getElementById('coller-lien');
+  f.onsubmit = (ev) => {
+    ev.preventDefault();
+    const v = f.lien.value.trim(), m = /[#&?]k=([\w-]+)/.exec(v) || /^([\w-]{16,})$/.exec(v);
+    if (!m) { H.toast('Je ne trouve pas la clé dans ce lien', true); return; }
+    try { localStorage.setItem('hub.jeton', m[1]); } catch { H.toast('Ce navigateur refuse de garder la clé', true); return; }
+    location.replace(location.pathname);
+  };
+};
+
 H.demarrer = async () => {
   const nav = document.getElementById('nav');
   nav.innerHTML = H.ordre.map((id) => (H.vues[id] ? `<button data-id="${id}" title="${H.vues[id].nom}"><svg viewBox="0 0 24 24">${ICONES[id]}</svg>${H.vues[id].nom}</button>` : `<h6>${id}</h6>`)).join('');
@@ -176,6 +195,7 @@ H.demarrer = async () => {
     H.rendre();
   } catch (e) {
     main.innerHTML = `<div class="carte c12" style="max-width:520px;margin:60px auto">${G.vide(e.message, '!')}</div>`;
+    if (H.enLigne) H.demanderLien(main, e.message);
   }
 
   // Relit les données chaque minute ; ne redessine que les vues « vivantes », et jamais pendant une saisie.
