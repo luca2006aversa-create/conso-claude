@@ -16,8 +16,10 @@
 <body>
   <div class="app">
     <aside>
-      <div class="marque" title="Ašru">𒀸𒊒</div>
+      <div class="marque"><i></i><b>Ašru</b><small>pilotage</small></div>
+      <button class="btn p" id="nouvelle-tache" hidden>+ Nouvelle tâche</button>
       <nav id="nav" aria-label="Espaces"></nav>
+      <div class="etat" id="etat"></div>
     </aside>
     <main id="vue"><div class="attente">Chargement…</div></main>
   </div>
@@ -36,6 +38,7 @@
   <script src="hub/vues/clients.js"></script>
   <script src="hub/vues/serveurs.js"></script>
   <script src="hub/vues/extractions.js"></script>
+  <script src="hub/vues/taches.js"></script>
   <script src="hub/vues/atelier.js"></script>
   <script src="hub/vues/conso.js"></script>
   <script>H.demarrer();</script>

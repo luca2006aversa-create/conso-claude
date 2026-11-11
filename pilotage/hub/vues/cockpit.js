@@ -49,22 +49,22 @@ H.vues.cockpit = {
 
   <div class="carte c3"><h2>À faire</h2><div class="todo">
     <div data-aller="clients/echanges" style="--c:var(--rouge)"><b>${c.relances.length}</b><span>relances<br>à faire</span></div>
-    <div data-aller="atelier/taches" style="--c:var(--rose)"><b>${t.aValider}</b><span>à valider</span></div>
-    <div data-aller="atelier/taches" style="--c:var(--orange)"><b>${t.attendToi}</b><span>attendent<br>ta réponse</span></div>
-    <div data-aller="atelier/taches" style="--c:var(--accent)"><b>${t.notes}</b><span>notes<br>à ranger</span></div></div></div>
+    <div data-aller="taches" style="--c:var(--rose)"><b>${t.aValider}</b><span>à valider</span></div>
+    <div data-aller="taches" style="--c:var(--orange)"><b>${t.attendToi}</b><span>attendent<br>ta réponse</span></div>
+    <div data-aller="taches" style="--c:var(--accent)"><b>${t.notes}</b><span>notes<br>à ranger</span></div></div></div>
 
-  <div class="carte c5 lien" data-aller="atelier/taches"><h2>Tâches<em>par semaine</em></h2>
+  <div class="carte c5 lien" data-aller="taches"><h2>Tâches<em>par semaine</em></h2>
     ${G.courbes([{ v: t.semaines.creees, c: 'accent', nom: 'ouvertes' }, { v: t.semaines.faites, c: 'vert', aire: 1, nom: 'terminées' }], { x: t.semaines.x, h: 200 })}
     ${G.legende([['accent', 'ouvertes'], ['vert', 'terminées']])}</div>
   <div class="carte c4 lien" data-aller="clients"><h2>Parcours des agences</h2>${G.entonnoir(c.entonnoir.filter((e, i) => [0, 1, 3, 5].includes(i)))}</div>
-  <div class="carte c3 lien" data-aller="atelier/taches"><h2>Tâches</h2>${G.donut([{ nom: 'Faites', v: t.par.fait || 0, c: 'vert' }, { nom: 'À valider', v: t.par.a_valider || 0, c: 'rose' }, { nom: 'En cours', v: t.par.en_cours || 0, c: 'orange' },
+  <div class="carte c3 lien" data-aller="taches"><h2>Tâches</h2>${G.donut([{ nom: 'Faites', v: t.par.fait || 0, c: 'vert' }, { nom: 'À valider', v: t.par.a_valider || 0, c: 'rose' }, { nom: 'En cours', v: t.par.en_cours || 0, c: 'orange' },
     { nom: 'À faire', v: t.par.a_faire || 0, c: 'accent' }, { nom: 'Idées', v: t.par.idee || 0, c: 'violet' }, { nom: 'En pause', v: t.par.en_pause || 0, c: 'encre-3' }], String(t.ouvertes), 'ouvertes', 150)}</div>
 
   <div class="carte c6 lien" data-aller="argent"><h2>Argent<em>prévision de ton scénario, sur 2 ans</em></h2>
     ${sim ? G.courbes([{ v: sim.R, c: 'vert', pointille: 0, nom: 'revenus' }, { v: sim.C, c: 'rouge', pointille: 0, nom: 'dépenses' }, { v: sim.N, c: 'accent', aire: 1, pointille: 0, nom: 'reste' }],
       { x: sim.R.map((_, i) => `m${i}`), unite: ' €', h: 200, zero: true, marques: eq > 0 ? [{ i: eq, s: 2, t: 'équilibre', c: 'vert' }] : [] }) : ''}
     ${G.legende([['vert', 'revenus'], ['rouge', 'dépenses'], ['accent', 'ce qu\'il te reste']])}</div>
-  <div class="carte c6 lien" data-aller="atelier/branches"><h2>Dernières versions<em>survole un point</em></h2>${this.frise(versions.slice(0, 7).reverse(), enLigne)}</div>
+  <div class="carte c6 lien" data-aller="atelier"><h2>Dernières versions<em>survole un point</em></h2>${this.frise(versions.slice(0, 7).reverse(), enLigne)}</div>
 </div>`;
   },
 
@@ -76,8 +76,8 @@ H.vues.cockpit = {
       const x = versions.length === 1 ? w / 2 : 40 + i * pas, dernier = i === versions.length - 1, ligne = enLigne.version && v.nom === `v${enLigne.version}`;
       return `<circle cx="${x}" cy="70" r="${dernier ? 11 : 8}" fill="${G.V(dernier ? 'accent' : 'surface')}" stroke="${G.V(ligne ? 'vert' : dernier ? 'accent' : 'encre-3')}" stroke-width="4"><title>${G.esc(v.message || v.nom)}</title></circle>
         <text class="f" x="${x}" y="100" text-anchor="middle">${G.esc(v.nom.replace(/^v/, ''))}</text><text x="${x}" y="116" text-anchor="middle">${H.dateCourte(v.date)}</text>
-        ${dernier ? `<rect x="${x - 38}" y="24" width="76" height="22" rx="11" fill="${G.V('accent')}"/><text x="${x}" y="39" text-anchor="middle" style="fill:#fff;font-weight:600">en travail</text>` : ''}
-        ${ligne ? `<rect x="${x - 34}" y="24" width="68" height="22" rx="11" fill="${G.V('vert')}"/><text x="${x}" y="39" text-anchor="middle" style="fill:#fff;font-weight:600">en ligne</text>` : ''}`;
+        ${dernier ? `<rect x="${x - 38}" y="24" width="76" height="22" rx="11" fill="${G.V('accent')}"/><text x="${x}" y="39" text-anchor="middle" style="fill:var(--sur);font-weight:600">en travail</text>` : ''}
+        ${ligne ? `<rect x="${x - 34}" y="24" width="68" height="22" rx="11" fill="${G.V('vert')}"/><text x="${x}" y="39" text-anchor="middle" style="fill:var(--sur);font-weight:600">en ligne</text>` : ''}`;
     }).join('')}</svg>`;
   },
 

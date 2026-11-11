@@ -7,7 +7,7 @@ H.vues.conso = {
   plein: () => !H.enLigne,
 
   rendre() {
-    if (!H.enLigne) return `${H.entete('Conso Claude')}<iframe src="conso.html" title="Consommation Claude"></iframe>`;
+    if (!H.enLigne) return `${H.entete('Conso Claude')}<iframe src="conso.html" data-incruste title="Consommation Claude"></iframe>`;
     const c = H.d.conso, k = H.calc.conso(), jours = H.derniersJours(30), v30 = k.jours(30);
     const projets = Object.entries(c.projets).sort((a, b) => b[1] - a[1]), modeles = Object.entries(c.modeles).sort((a, b) => b[1] - a[1]);
     const couleurs = ['accent', 'turquoise', 'violet', 'orange', 'rose', 'vert'];

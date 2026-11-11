@@ -1,109 +1,124 @@
-// Atelier : le code. Branches à la verticale (le plus récent en haut, chaque point détaillé sur sa ligne),
-// comparaison de deux versions du site, tâches et page « Comprendre » (les pages d'origine, gardées telles quelles).
+// Atelier : le code. Branches (le graphe du pilotage d'origine : un seul tracé vertical, le plus récent en haut,
+// dates à gauche, une ligne détaillée par point), comparaison de deux versions du site, et la page « Comprendre ».
 'use strict';
 
 H.vues.atelier = {
   nom: 'Atelier',
-  get onglets() { return [['', 'Branches'], ['versions', 'Versions'], ['taches', 'Tâches'], ...(H.enLigne ? [] : [['comprendre', 'Comprendre']])]; },
-  plein: (onglet) => !H.enLigne && ['taches', 'comprendre'].includes(onglet),
+  get onglets() { return [['', 'Branches'], ['versions', 'Versions'], ...(H.enLigne ? [] : [['comprendre', 'Comprendre']])]; },
+  plein: (onglet) => !H.enLigne && onglet === 'comprendre',
   STATUTS: { fait: 'vert', a_valider: 'rose', en_cours: 'orange', a_faire: 'accent', idee: 'violet', en_pause: 'encre-3', abandon: 'encre-3' },
 
   rendre(onglet) {
     const tete = H.entete('Atelier', { onglets: this.onglets, actif: onglet, base: 'atelier' });
-    if (onglet === 'taches') return tete + (H.enLigne ? this.taches() : '<iframe src="index.html" title="Tableau des tâches"></iframe>');
-    if (onglet === 'comprendre' && !H.enLigne) return `${tete}<iframe src="projet.html" title="Comprendre le projet"></iframe>`;
+    if (onglet === 'comprendre' && !H.enLigne) return `${tete}<iframe src="projet.html" data-incruste title="Comprendre le projet"></iframe>`;
     return tete + (onglet === 'versions' ? this.versions() : this.branches());
   },
 
-  /* ================= Branches à la verticale ================= */
+  /* ================= Branches ================= */
   branches() {
-    const h = H.d.historique, e = (H.etat.atelier ??= { filtre: 'tout' }), enLigne = H.d.site.reglages.enLigne;
+    const h = H.d.historique, e = (H.etat.atelier ??= { filtre: 'tout', debuts: false }), enLigne = H.d.site.reglages.enLigne;
     if (h.erreur || !h.branches) return `<div class="carte c12">${G.vide(h.erreur || 'Historique indisponible', '!')}</div>`;
-    const temps = (iso) => new Date(iso).getTime();
+    const T = (iso) => new Date(iso).getTime(), COL = 22, X0 = 18, PAL = ['turquoise', 'vert', 'violet', 'rouge', 'orange', 'rose'];
+    const duree = (a, b) => { const j = Math.round((T(b) - T(a)) / 864e5); return j <= 0 ? 'le jour même' : j === 1 ? '1 jour' : `${j} jours`; };
 
-    // 1. Une ligne par point de l'histoire : fusion d'un chantier, chantier ouvert, version, gros commit direct.
-    let rangs = [];
-    for (const b of h.branches) rangs.push({ type: b.ouverte ? 'ouverte' : 'fusion', date: b.fin, b, h: b.h, versions: [] });
-    for (const ev of h.evenements) if (ev.type === 'jalon') rangs.push({ type: 'jalon', date: ev.date, ev, h: ev.h, versions: [] });
-    for (const ev of h.evenements.filter((x) => x.type === 'version')) {
-      const r = rangs.find((x) => x.type !== 'ouverte' && (x.h === ev.h || (x.b && x.b.commits.some((c) => c.h === ev.h))));
-      if (r) r.versions.push(ev); else rangs.push({ type: 'version', date: ev.date, h: ev.h, versions: [ev] });
+    // 1. Une ligne par point : fin (ou état) d'un chantier, début d'un chantier, version, gros commit direct.
+    const branches = (e.filtre === 'versions' ? [] : h.branches).map((b, i) => ({ ...b, i }));
+    const evenements = e.filtre === 'chantiers' ? [] : e.filtre === 'versions' ? h.evenements.filter((x) => x.type === 'version' && x.niveau !== 'sauvegarde') : h.evenements;
+    const lignes = [];
+    for (const b of branches) { lignes.push({ type: b.ouverte ? 'ouverte' : 'fusion', date: b.fin, b, h: 52 }); if (e.debuts) lignes.push({ type: 'debut', date: b.debut, b, h: 30 }); }
+    for (const ev of evenements) lignes.push({ type: ev.type, date: ev.date, e: ev, h: ev.type === 'jalon' ? 52 : 34 });
+    lignes.sort((a, b) => T(b.date) - T(a.date) || (a.type === 'debut') - (b.type === 'debut'));
+    let hauteur = 0;
+    for (const l of lignes) { l.haut = hauteur; l.y = hauteur + l.h / 2; hauteur += l.h; }
+    hauteur += 10;
+    const travail = lignes.find((l) => l.type !== 'ouverte' && l.type !== 'debut');
+
+    // 2. Départ de chaque chantier, puis sa voie : la première libre sur toute sa hauteur.
+    const yDate = (iso) => { const l = lignes.find((x) => T(x.date) <= T(iso)); return l ? Math.max(l.haut, 4) : hauteur - 6; };
+    for (const b of branches) {
+      b.yFin = lignes.find((l) => l.b === b && l.type !== 'debut').y;
+      const ld = lignes.find((l) => l.b === b && l.type === 'debut');
+      b.yDebut = Math.max(ld ? ld.y : yDate(b.debut), b.yFin + 24);
     }
-    if (e.filtre === 'versions') rangs = rangs.filter((r) => r.versions.some((v) => v.niveau !== 'sauvegarde'));
-    if (e.filtre === 'chantiers') rangs = rangs.filter((r) => r.b);
-    rangs.sort((a, b) => temps(b.date) - temps(a.date));
-
-    // 2. Une voie (colonne) par chantier, du rang de sa fusion jusqu'au dernier rang plus récent que son départ.
-    const palette = ['vert', 'accent', 'violet', 'turquoise', 'rose'], occupe = [];
-    rangs.forEach((r, i) => {
-      r.i = i; if (!r.b) return;
-      const depart = temps(r.b.debut);
-      let bas = i; while (bas + 1 < rangs.length && temps(rangs[bas + 1].date) >= depart) bas++;
-      let k = 0; while (occupe[k] !== undefined && occupe[k] >= i) k++;
-      occupe[k] = bas; r.voie = k; r.bas = bas; r.couleur = r.type === 'ouverte' ? 'orange' : palette[k % palette.length];
+    const finVoie = [];
+    [...branches].sort((a, z) => a.yFin - z.yFin).forEach((b, k) => {
+      let v = finVoie.findIndex((y) => y < b.yFin - 6);
+      if (v < 0) { v = finVoie.length; finVoie.push(0); }
+      finVoie[v] = b.yDebut; b.voie = v + 1; b.couleur = G.V(PAL[k % PAL.length]);
     });
-    const pas = occupe.length > 7 ? 12 : 16, lg = 28 + Math.max(1, occupe.length) * pas, X = (k) => 12 + (k + 1) * pas;
-    const chantiers = rangs.filter((r) => r.b);
+    const largeur = X0 + (finVoie.length + 1) * COL;
 
-    const poids = (plus, moins) => { const t = plus + moins; if (!t) return ''; const w = Math.min(130, 12 + Math.sqrt(t) * 1.3);
-      return `<span title="${G.nb(plus)} lignes ajoutées, ${G.nb(moins)} retirées"><span class="poids" style="width:${w}px"><i style="width:${plus / t * 100}%;background:var(--vert)"></i><i style="width:${moins / t * 100}%;background:var(--rouge)"></i></span> +${G.court(plus)} −${G.court(moins)}</span>`; };
-    const pastilles = (taches) => (taches || []).slice(0, 4).map((t) => `<span class="puce tache" title="${G.esc(t.titre)}"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${G.V(this.STATUTS[t.statut] || 'encre-3')};margin-right:4px"></i>#${t.id} ${G.esc(t.titre.length > 46 ? `${t.titre.slice(0, 44)}…` : t.titre)}</span>`).join('') + ((taches || []).length > 4 ? `<span class="sous">+ ${taches.length - 4}</span>` : '');
-    const badges = (versions) => versions.map((v) => (v.niveau === 'sauvegarde' ? `<span class="puce" title="${G.esc(v.message)}">⚑ ${G.esc(v.nom)}</span>`
-      : `<span class="version-b" style="--c:${G.V(v.niveau === 'version' ? 'accent' : 'encre-2')}" title="${G.esc(v.message)}">${G.esc(v.nom.replace(/^v/, ''))}</span>${enLigne.version && v.nom === `v${enLigne.version}` ? '<span class="version-b" style="--c:var(--vert)">en ligne</span>' : ''}`)).join(' ');
-    const premierMain = rangs.findIndex((r) => r.type !== 'ouverte');
+    // 3. Le tracé.
+    const traits = [`<line x1="${X0}" y1="${travail ? travail.y : 0}" x2="${X0}" y2="${hauteur}" stroke="${G.V('encre')}" stroke-width="3" stroke-linecap="round"/>`], points = [];
+    for (const b of branches) {
+      const x = X0 + b.voie * COL, r = 12, court = b.yDebut - b.yFin < r * 3.4;
+      const d = court ? (b.ouverte ? `M${X0},${b.yDebut} C${x},${b.yDebut} ${x},${b.yDebut} ${x},${b.yFin}` : `M${X0},${b.yDebut} C${x},${b.yDebut} ${x},${b.yFin} ${X0},${b.yFin}`)
+        : b.ouverte ? `M${X0},${b.yDebut} C${X0},${b.yDebut - r} ${x},${b.yDebut - r} ${x},${b.yDebut - r * 1.6} L${x},${b.yFin}`
+          : `M${X0},${b.yDebut} C${X0},${b.yDebut - r} ${x},${b.yDebut - r} ${x},${b.yDebut - r * 1.6} L${x},${b.yFin + r * 1.6} C${x},${b.yFin + r} ${X0},${b.yFin + r} ${X0},${b.yFin}`;
+      traits.push(`<path d="${d}" fill="none" stroke="${b.couleur}" stroke-width="2.4"${b.ouverte ? ' stroke-dasharray="5 4"' : ''}/>`);
+      points.push(`<circle cx="${X0}" cy="${b.yDebut}" r="3" fill="${b.couleur}"/>`);
+      points.push(b.ouverte ? `<circle cx="${x}" cy="${b.yFin}" r="5.5" fill="${G.V('surface')}" stroke="${b.couleur}" stroke-width="2.5"/>`
+        : `<circle cx="${X0}" cy="${b.yFin}" r="6.5" fill="${b.rapide ? G.V('surface') : b.couleur}" stroke="${b.couleur}" stroke-width="3"/>`);
+    }
+    for (const l of lignes) {
+      if (l.type === 'jalon') points.push(`<rect x="${X0 - 5}" y="${l.y - 5}" width="10" height="10" transform="rotate(45 ${X0} ${l.y})" fill="${G.V('encre')}"/>`);
+      if (l.type === 'version') { const r = l.e.niveau === 'retouche' ? 4 : l.e.niveau === 'version' ? 8 : 6;
+        points.push(`<rect x="${X0 - r}" y="${l.y - r}" width="${2 * r}" height="${2 * r}" rx="3" fill="${G.V(l.e.niveau === 'sauvegarde' ? 'orange' : 'vert')}" stroke="${G.V('surface')}" stroke-width="2"/>`); }
+    }
 
-    const lignes = rangs.map((r, i) => {
-      // Voies qui traversent ce rang.
-      let voies = `<i class="voie" style="left:10.5px;--c:var(--encre)${i === premierMain ? ';top:22px' : i < premierMain ? ';display:none' : ''}"></i>`, noeud = '';
-      for (const c of chantiers) {
-        if (i < c.i || i > c.bas) continue;
-        const x = X(c.voie), coul = G.V(c.couleur), ouverte = c.type === 'ouverte';
-        let haut = 0;
-        if (i === c.i) {
-          haut = ouverte ? 22 : 40;
-          noeud += ouverte ? `<circle cx="${x}" cy="22" r="6" fill="${G.V('surface')}" stroke="${coul}" stroke-width="3"/>`
-            : `<path d="M12 22C12 34 ${x} 26 ${x} 40" fill="none" stroke="${coul}" stroke-width="3"/>`;
-        }
-        voies += `<i class="voie${ouverte ? ' ouverte' : ''}" style="left:${x - 1.5}px;top:${haut}px;bottom:${i === c.bas ? 16 : 0}px;--c:${coul}"></i>`;
-        if (i === c.bas) voies += `<svg width="${lg}" height="16" style="position:absolute;left:0;bottom:0;overflow:visible"><path d="M${x} 0C${x} 10 12 6 12 16" fill="none" stroke="${coul}" stroke-width="3"${ouverte ? ' stroke-dasharray="6 5"' : ''}/></svg>`;
+    // 4. Les dates (une marque au premier point de chaque jour) et les libellés.
+    let jourPrec = '';
+    const dates = lignes.map((l) => { const j = H.jour(l.date); if (j === jourPrec) return ''; jourPrec = j;
+      return `<div class="hi-date" style="top:${l.haut}px"><b>${H.dateCourte(j)}</b>${['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'][new Date(l.date).getDay()]}</div>`; }).join('');
+    const poids = (plus, moins) => { const t = plus + moins; if (!t) return ''; const w = Math.min(110, 12 + Math.sqrt(t) * 1.2);
+      return `<span title="${G.nb(plus)} lignes ajoutées, ${G.nb(moins)} retirées"><span class="poids" style="width:${w}px"><i style="width:${plus / t * 100}%;background:var(--vert)"></i><i style="width:${moins / t * 100}%;background:var(--rouge)"></i></span>+${G.court(plus)} −${G.court(moins)}</span>`; };
+    const puces = (taches) => (taches || []).slice(0, 3).map((t) => `<span class="hi-puce" data-ouvrir="${t.id}" title="${G.esc(t.titre)}"><i style="background:${G.V(this.STATUTS[t.statut] || 'encre-3')}"></i>#${t.id} ${G.esc(t.titre.length > 34 ? `${t.titre.slice(0, 32)}…` : t.titre)}</span>`).join('') + ((taches || []).length > 3 ? `<span class="hi-puce">+${taches.length - 3}</span>` : '');
+    const ici = (l) => (l === travail ? '<span class="hi-version travail">en travail</span>' : '');
+    const libelles = lignes.map((l) => {
+      const st = `top:${l.haut}px;height:${l.h}px`;
+      if (l.type === 'debut') return `<div class="hi-ligne" style="${st}"><span class="hi-debut">↳ début de <b style="color:${l.b.couleur}">${G.esc(l.b.nom.replace(/^feature\//, ''))}</b></span></div>`;
+      if (l.type === 'version') {
+        const v = l.e, texte = v.niveau === 'sauvegarde' ? 'sauvegarde : on peut revenir à cet état' : (v.message || '').replace(/^Version [\d.]+ ?:? ?/, '') || (v.niveau === 'version' ? 'nouvelle version' : 'retouche');
+        return `<div class="hi-ligne hi-v" style="${st}"><div class="hi-l1"><span class="hi-version ${v.niveau}">${G.esc(v.niveau === 'sauvegarde' ? v.nom : v.nom.replace(/^v/, ''))}</span>${ici(l)}${enLigne.version && v.nom === `v${enLigne.version}` ? '<span class="hi-version ligne">en ligne</span>' : ''}<span class="hi-titre" title="${G.esc(texte)}">${G.esc(texte)}</span></div></div>`;
       }
-      if (r.type === 'fusion') noeud += `<circle cx="12" cy="22" r="7" fill="${G.V(r.couleur)}" stroke="${G.V('surface')}" stroke-width="2"/>`;
-      if (r.type === 'version') noeud += `<circle cx="12" cy="22" r="7" fill="${G.V('surface')}" stroke="${G.V('encre')}" stroke-width="3"/>`;
-      if (r.type === 'jalon') noeud += `<rect x="7" y="17" width="10" height="10" rx="2" fill="${G.V('encre-3')}" stroke="${G.V('surface')}" stroke-width="2"/>`;
-
-      let corps = '';
-      if (r.b) {
-        const b = r.b, joursDe = Math.max(1, Math.round((temps(b.fin) - temps(b.debut)) / 864e5)), titre = b.titre || b.nom;
-        const sujets = b.commits.filter((c) => c.sujet !== titre && !/^Version \d/.test(c.sujet)).slice(0, 4);
-        corps = `<div class="tete"><time>${H.dateCourte(r.date)}</time>${badges(r.versions)}${i === premierMain ? '<span class="version-b" style="--c:var(--accent)">en travail</span>' : ''}
-            <strong>${G.esc(titre)}</strong><span class="nomb">${G.esc(b.nom.replace(/^feature\//, ''))}${r.type === 'ouverte' ? ' · <b style="color:var(--orange)">ouvert</b>' : ''}</span></div>
-          <div class="detail"><span>⑂ ${b.nb} commit${b.nb > 1 ? 's' : ''}</span><span>${joursDe} j</span>${poids(b.plus, b.moins)}${pastilles(b.taches)}</div>
-          ${sujets.length ? `<ul>${sujets.map((c) => `<li title="${G.esc(c.sujet)}">${G.esc(c.sujet)}</li>`).join('')}${b.commits.length > sujets.length + 1 ? `<li class="sous">et ${b.nb - sujets.length} autres commits</li>` : ''}</ul>` : ''}`;
-      } else if (r.type === 'jalon') {
-        corps = `<div class="tete"><time>${H.dateCourte(r.date)}</time>${badges(r.versions)}<strong>${G.esc(r.ev.sujet)}</strong><span class="nomb">directement sur main</span></div>
-          <div class="detail">${poids(r.ev.plus, r.ev.moins)}${pastilles(r.ev.taches)}</div>`;
-      } else {
-        const v = r.versions.find((x) => x.niveau !== 'sauvegarde') || r.versions[0];
-        corps = `<div class="tete"><time>${H.dateCourte(r.date)}</time>${badges(r.versions)}${i === premierMain ? '<span class="version-b" style="--c:var(--accent)">en travail</span>' : ''}
-          <strong>${G.esc((v.message || v.nom).replace(/^Version [\d.]+\s*:\s*/, ''))}</strong></div>`;
-      }
-      return `<div class="rang"><div class="voies">${voies}<svg class="noeud" width="${lg}" height="44">${noeud}</svg></div><div class="corps">${corps}</div></div>`;
+      if (l.type === 'jalon') return `<div class="hi-ligne hi-jalon" style="${st}"><div class="hi-l1">${ici(l)}<span class="hi-titre" title="${G.esc(l.e.sujet)}">${G.esc(l.e.sujet)}</span></div>
+        <div class="hi-l2"><span>directement sur main</span>${poids(l.e.plus, l.e.moins)}${puces(l.e.taches)}</div></div>`;
+      const b = l.b;
+      return `<div class="hi-ligne cliquable" style="${st}" data-b="${b.i}"><div class="hi-l1"><span class="hi-nom" style="color:${b.couleur}">${G.esc(b.nom.replace(/^feature\//, ''))}</span>${b.ouverte ? '<span class="hi-ouverte">ouvert</span>' : ici(l)}
+          <span class="hi-titre" title="${G.esc(b.titre || '')}">${b.titre && !b.titre.startsWith(b.nom) ? G.esc(b.titre) : ''}</span></div>
+        <div class="hi-l2"><span>${b.nb} commit${b.nb > 1 ? 's' : ''} · ${duree(b.debut, b.fin)}</span>${poids(b.plus, b.moins)}${puces(b.taches)}</div></div>`;
     }).join('');
 
     // Rythme : fusions et versions par semaine sur 12 semaines.
     const lundis = Array.from({ length: 12 }, (_, i) => H.lundi(H.jour(Date.now() - (11 - i) * 7 * 864e5)));
-    const parSemaine = (dates) => lundis.map((lu, i) => dates.filter((d) => H.jour(d) >= lu && (!lundis[i + 1] || H.jour(d) < lundis[i + 1])).length);
+    const parSemaine = (ds) => lundis.map((lu, i) => ds.filter((d) => H.jour(d) >= lu && (!lundis[i + 1] || H.jour(d) < lundis[i + 1])).length);
     const c = h.chiffres;
     return `<div class="grille">
   ${G.kpi('Chantiers fusionnés', String(c.fusionnees), 'revenus dans main', parSemaine(h.branches.filter((b) => !b.ouverte).map((b) => b.fin)), 'vert', 'c3')}
   ${G.kpi('Chantiers ouverts', String(c.ouvertes), 'pas encore dans main', null, 'orange', 'c3')}
   ${G.kpi('Versions', String(c.versions), `dernière : ${G.esc(H.d.site.versionMain || '')}`, parSemaine(h.evenements.filter((x) => x.type === 'version').map((x) => x.date)), 'accent', 'c3')}
-  ${G.kpi('Commits', G.nb(c.commits), `depuis le ${H.dateCourte(c.premier)}`, null, 'violet', 'c3')}
-  <div class="carte c12"><h2>L'histoire du site<em>le plus récent en haut · la ligne noire est main</em></h2>
-    <div class="boutons" style="margin-top:0"><span class="seg">${[['tout', 'Tout'], ['chantiers', 'Chantiers'], ['versions', 'Versions']].map(([id, nom]) => `<button data-filtre-arbre="${id}" class="${e.filtre === id ? 'actif' : ''}">${nom}</button>`).join('')}</span>
-      ${G.legende([['encre', 'main'], ['vert', 'chantier fusionné'], ['orange', 'chantier ouvert']])}</div>
-    <div class="arbre" style="--lg:${lg}px">${lignes || G.vide('Rien à montrer avec ce filtre')}</div></div>
+  ${G.kpi('Commits', G.nb(c.commits), `depuis le ${H.dateCourte(c.premier)} · ${duree(c.premier, c.dernier)}`, null, 'violet', 'c3')}
+  <div class="carte c12"><h2>L'histoire du site<em>le plus récent en haut · clique un chantier pour son détail</em></h2>
+    <div class="boutons" style="margin-top:0;gap:14px"><span class="seg">${[['tout', 'Tout'], ['chantiers', 'Chantiers'], ['versions', 'Versions']].map(([id, nom]) => `<button data-filtre-arbre="${id}" class="${e.filtre === id ? 'actif' : ''}">${nom}</button>`).join('')}</span>
+      <label class="sous" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="voir-debuts"${e.debuts ? ' checked' : ''}> débuts de branche</label>
+      <div class="hi-leg" style="margin-left:auto"><span><i style="width:3px;height:14px;border-radius:2px;background:var(--encre)"></i>main</span><span><i style="background:var(--turquoise)"></i>chantier fusionné</span>
+        <span><i style="border:2.5px solid var(--violet)"></i>ouvert</span><span><i style="border-radius:3px;background:var(--vert)"></i>version</span><span><i style="border-radius:3px;background:var(--orange)"></i>sauvegarde</span>
+        <span><i style="border-radius:1px;transform:rotate(45deg) scale(.8);background:var(--encre)"></i>commit direct</span></div></div>
+    ${lignes.length ? `<div class="hi-graphe"><div class="hi-grille" style="--l-svg:${largeur}px;height:${hauteur}px"><div class="hi-dates">${dates}</div>
+      <svg width="${largeur}" height="${hauteur}" viewBox="0 0 ${largeur} ${hauteur}" aria-hidden="true" style="max-width:none">${traits.join('')}${points.join('')}</svg><div class="hi-libelles">${libelles}</div></div></div>` : G.vide('Rien à montrer avec ce filtre')}</div>
 </div>`;
+  },
+
+  // Volet d'un chantier : ses chiffres, ses tâches, ses commits.
+  detail(i) {
+    const b = H.d.historique.branches[i], T = (iso) => new Date(iso).getTime(), j = Math.max(0, Math.round((T(b.fin) - T(b.debut)) / 864e5));
+    H.volet(`<div id="b-detail"><h2 class="nom">${G.esc(b.nom.replace(/^feature\//, ''))}</h2><div class="sous">${G.esc(b.titre || '')}</div>
+      <div class="resultats" style="grid-template-columns:1fr 1fr;margin-top:12px"><div><span class="sous">État</span><b style="font-size:15px">${b.ouverte ? 'ouvert' : b.rapide ? 'fusionné (avance directe)' : 'fusionné'}</b></div>
+        <div><span class="sous">Durée</span><b style="font-size:15px">${j ? `${j} j` : 'le jour même'}</b><span class="sous">${H.dateCourte(b.debut)} → ${H.dateCourte(b.fin)}</span></div>
+        <div><span class="sous">Commits</span><b>${b.nb}</b></div><div><span class="sous">Lignes</span><b><span class="plus">+${G.court(b.plus)}</span> <span class="moins">−${G.court(b.moins)}</span></b></div></div>
+      <section><h3>Tâches</h3>${b.taches.length ? b.taches.map((t) => `<div style="margin-bottom:5px"><span class="lien-t" data-ouvrir="${t.id}">#${t.id}</span> ${G.esc(t.titre)} <span class="statut-t" style="--c:${G.V(this.STATUTS[t.statut] || 'encre-3')}">${G.esc(String(t.statut).replace('_', ' '))}</span></div>`).join('') : '<div class="sous">Aucune tâche reliée.</div>'}</section>
+      <section><h3>Commits${b.commits.length >= 40 ? '<small>les 40 derniers</small>' : ''}</h3><div class="fil">${b.commits.map((c) => `<div><time>${H.dateCourte(c.date)} · ${G.esc(c.h)}</time>${G.esc(c.sujet)}</div>`).join('')}</div></section></div>`);
+    document.getElementById('b-detail').onclick = (ev) => { const l = ev.target.closest('[data-ouvrir]'); if (l) H.vues.taches.ouvrir(l.dataset.ouvrir); };
   },
 
   /* ================= Comparer deux versions ================= */
@@ -156,22 +171,18 @@ H.vues.atelier = {
       <span class="etiq" style="left:8px">${G.esc(A.nom)}</span><span class="etiq" style="right:8px">${G.esc(B.nom)}</span></div>`;
   },
 
-  /* ================= Tâches (version en ligne, en lecture) ================= */
-  taches() {
-    const t = H.d.taches, e = (H.etat.taches ??= { projet: 'sitescope' });
-    const liste = t.liste.filter((x) => !e.projet || x.projet === e.projet), prio = { urgent: 0, important: 1, normal: 2, un_jour: 3 };
-    const statuts = t.statuts.filter((s) => s.id !== 'abandon');
-    return `<div class="grille"><div class="carte c12"><div class="boutons" style="margin-top:0"><span class="seg">${[{ id: '', nom: 'Tous' }, ...t.projets].map((p) => `<button data-projet="${p.id}" class="${e.projet === p.id ? 'actif' : ''}">${G.esc(p.nom)}</button>`).join('')}</span></div>
-      <div class="kanban" style="--n:${statuts.length}">${statuts.map((s) => { const dans = liste.filter((x) => x.statut === s.id).sort((a, b) => (prio[a.priorite] ?? 2) - (prio[b.priorite] ?? 2) || b.id - a.id);
-        return `<div class="col" style="--c:${G.V(this.STATUTS[s.id])}"><h3>${s.nom}<em>${dans.length}</em></h3>${dans.slice(0, s.id === 'fait' ? 15 : 60).map((x) => `<div class="fiche" data-tache="${x.id}" style="border-left:3px solid ${G.V({ urgent: 'rouge', important: 'orange' }[x.priorite] || 'trait')}"><span><strong>${G.esc(x.titre.length > 70 ? `${x.titre.slice(0, 68)}…` : x.titre)}</strong><span class="ligne">#${x.id}${x.qui === 'toi' ? ' · <b class="retard">à toi</b>' : ''}</span></span></div>`).join('')}</div>`; }).join('')}</div></div></div>`;
-  },
-
   apres(onglet) {
     const vue = document.getElementById('vue');
     vue.querySelectorAll('[data-filtre-arbre]').forEach((b) => { b.onclick = () => { H.etat.atelier.filtre = b.dataset.filtreArbre; H.rendre(); }; });
-    vue.querySelectorAll('[data-projet]').forEach((b) => { b.onclick = () => { H.etat.taches.projet = b.dataset.projet; H.rendre(); }; });
-    vue.querySelectorAll('[data-tache]').forEach((f) => { f.onclick = () => { const t = H.d.taches.liste.find((x) => x.id === Number(f.dataset.tache));
-      H.volet(`<h2 class="nom">#${t.id} ${G.esc(t.titre)}</h2><span class="puce">${G.esc(t.statut.replace('_', ' '))}</span> <span class="puce">${G.esc(t.priorite || '')}</span><section><h3>Pour toi</h3><div style="white-space:pre-wrap;font-size:13px">${G.esc(t.pourToi || '—')}</div></section>`); }; });
+    const debuts = document.getElementById('voir-debuts');
+    if (debuts) debuts.onchange = () => { H.etat.atelier.debuts = debuts.checked; H.rendre(); };
+    const graphe = vue.querySelector('.hi-graphe');
+    if (graphe) graphe.onclick = (ev) => {
+      const tache = ev.target.closest('[data-ouvrir]');
+      if (tache) { H.vues.taches.ouvrir(tache.dataset.ouvrir); return; }
+      const ligne = ev.target.closest('[data-b]');
+      if (ligne) { graphe.querySelectorAll('.choisie').forEach((x) => x.classList.remove('choisie')); ligne.classList.add('choisie'); this.detail(Number(ligne.dataset.b)); }
+    };
     if (onglet !== 'versions' || H.enLigne) return;
 
     const e = H.etat.versions, s = H.d.site;

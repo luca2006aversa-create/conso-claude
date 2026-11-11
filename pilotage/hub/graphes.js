@@ -117,7 +117,7 @@ const G = window.G = (() => {
     const ep = (v) => Math.sqrt(v) / M * haut + 16;
     et.forEach((e, i) => {
       const a = ep(e.v), b = et[i + 1] ? ep(et[i + 1].v) : a, cy = (h - 44) / 2 + 4;
-      o += `<path d="M${i * l + 2} ${cy - a / 2}L${(i + 1) * l - 2} ${cy - b / 2}L${(i + 1) * l - 2} ${cy + b / 2}L${i * l + 2} ${cy + a / 2}Z" fill="${V(e.c)}" opacity=".88"/><text class="f" x="${i * l + l / 2}" y="${cy + 6}" text-anchor="middle" style="font-size:17px;fill:#fff;paint-order:stroke;stroke:rgba(0,0,0,.25);stroke-width:2px">${nb(e.v)}</text><text class="f" x="${i * l + l / 2}" y="${h - 22}" text-anchor="middle">${esc(e.nom)}</text>`;
+      o += `<path d="M${i * l + 2} ${cy - a / 2}L${(i + 1) * l - 2} ${cy - b / 2}L${(i + 1) * l - 2} ${cy + b / 2}L${i * l + 2} ${cy + a / 2}Z" fill="${V(e.c)}" opacity=".88"/><text class="f" x="${i * l + l / 2}" y="${cy + 6}" text-anchor="middle" style="font-size:17px;fill:var(--sur);paint-order:stroke;stroke:rgba(0,0,0,.25);stroke-width:2px">${nb(e.v)}</text><text class="f" x="${i * l + l / 2}" y="${h - 22}" text-anchor="middle">${esc(e.nom)}</text>`;
       if (et[i + 1] && e.v) o += `<text x="${(i + 1) * l}" y="${h - 6}" text-anchor="middle">${Math.round(et[i + 1].v / e.v * 100)} % ›</text>`;
     });
     return o + '</svg>';

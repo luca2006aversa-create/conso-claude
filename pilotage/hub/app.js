@@ -5,7 +5,7 @@
 const H = window.H = {
   d: null,                 // toutes les données (/api/hub/tout)
   vues: {},                // id -> { nom, icone, rendre(onglet), apres(onglet), plein, vivant, pastille() }
-  ordre: ['cockpit', 'argent', 'clients', 'serveurs', 'extractions', null, 'atelier', 'conso'],
+  ordre: ['Le site', 'cockpit', 'argent', 'clients', 'serveurs', 'extractions', 'Le travail', 'taches', 'atelier', 'conso'],
   enLigne: !!(window.HUB_CONFIG && window.HUB_CONFIG.url),
   charge: 0,               // heure du dernier chargement réussi
   etat: {},                // ce que les vues veulent garder d'un affichage à l'autre (globe, curseurs, filtres)
@@ -79,13 +79,13 @@ H.toast = (texte, erreur = false) => {
 // Lance une action qui écrit ; affiche l'erreur au lieu de la laisser passer en silence.
 H.essayer = async (action, ok) => { try { const r = await action(); if (ok) H.toast(ok); return r; } catch (e) { H.toast(e.message, true); return null; } };
 
-H.volet = (html) => { const v = document.getElementById('volet'); v.innerHTML = `<button class="fermer" aria-label="Fermer">×</button>${html}`; v.classList.add('ouvert'); };
-H.fermerVolet = () => document.getElementById('volet').classList.remove('ouvert');
+H.volet = (html, large = false) => { const v = document.getElementById('volet'); v.innerHTML = `<button class="fermer" aria-label="Fermer">×</button>${html}`; v.classList.toggle('large', large); v.classList.add('ouvert'); };
+H.fermerVolet = () => { document.getElementById('volet').classList.remove('ouvert'); H.voletFerme && H.voletFerme(); H.voletFerme = null; };
 
 H.entete = (titre, { onglets = null, actif = '', base = '', droite = '' } = {}) => {
   const vieux = Date.now() - H.charge > (H.enLigne ? 3 * 3600e3 : 180e3);
   return `<div class="haut"><h1>${G.esc(titre)}</h1>
-    ${onglets ? `<div class="seg">${onglets.map(([id, nom]) => `<button data-aller="${base}/${id}" class="${id === actif ? 'actif' : ''}">${G.esc(nom)}</button>`).join('')}</div>` : ''}
+    ${onglets ? `<div class="onglets">${onglets.map(([id, nom]) => `<button data-aller="${base}/${id}" class="${id === actif ? 'actif' : ''}">${G.esc(nom)}</button>`).join('')}</div>` : ''}
     <div class="droite">${droite}
       ${H.enLigne ? '' : '<input class="noter" id="noter" placeholder="Noter une idée… (Entrée)" aria-label="Note rapide">'}
       <span class="frais${vieux ? ' vieux' : ''}" title="Source : ${G.esc(H.source || '')}"><i></i>${H.enLigne ? 'copie du PC, ' : ''}${H.ilya(H.charge)}</span>
@@ -99,6 +99,7 @@ const ICONES = {
   clients: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6M16 5a3.5 3.5 0 010 6.5M18 14c2 .8 3.2 2.8 3.5 6"/>',
   serveurs: '<rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/>',
   extractions: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
+  taches: '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/>',
   atelier: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10M18 11c0 4-6 3-12 5"/>',
   conso: '<path d="M12 3a9 9 0 109 9h-9z"/><path d="M15 3.5A9 9 0 0120.5 9H15z"/>',
 };
@@ -115,15 +116,28 @@ H.rendre = (garderVolet = false) => {
   const vue = H.vues[id], main = document.getElementById('vue');
   if (garderVolet !== true) H.fermerVolet();
   main.classList.toggle('plein', !!(vue.plein && vue.plein(onglet)));
-  try { main.innerHTML = vue.rendre(onglet); if (vue.apres) vue.apres(onglet); }
+  try {
+    main.innerHTML = vue.rendre(onglet);
+    main.querySelectorAll('iframe[data-incruste]').forEach((cadre) => { cadre.style.visibility = 'hidden';
+      cadre.addEventListener('load', () => { try { const doc = cadre.contentDocument, lien = doc.createElement('link'); lien.rel = 'stylesheet'; lien.href = 'hub/incruste.css';
+        lien.onload = lien.onerror = () => { cadre.style.visibility = ''; }; doc.head.append(lien); } catch { cadre.style.visibility = ''; } }); });
+    if (vue.apres) vue.apres(onglet);
+  }
   catch (e) { console.error(e); main.innerHTML = `${H.entete(vue.nom)}<div class="carte c12">${G.vide(`Cette vue a rencontré une erreur : ${e.message}`, '!')}</div>`; }
   document.querySelectorAll('#nav button').forEach((b) => {
     b.classList.toggle('actif', b.dataset.id === id);
-    const n = H.vues[b.dataset.id].pastille ? H.vues[b.dataset.id].pastille() : 0;
+    const n = H.d && H.vues[b.dataset.id].pastille ? H.vues[b.dataset.id].pastille() : 0;
     b.querySelector('b')?.remove();
     if (n) b.insertAdjacentHTML('beforeend', `<b>${n}</b>`);
   });
   H.vueActive = id;
+  // Bloc « État » en bas de la barre latérale, comme dans Ašru.
+  const s = H.d.site, debout = s.instances.filter((i) => !i.releves.length || i.releves[i.releves.length - 1].ok).length;
+  document.getElementById('etat').innerHTML = `<h6>État</h6>
+    <div><i class="${s.reglages.enLigne.url ? '' : 'gris'}"></i>${s.reglages.enLigne.url ? 'Site en ligne' : 'Site pas encore en ligne'}</div>
+    <div><i class="${!s.instances.length ? 'gris' : debout === s.instances.length ? '' : 'att'}"></i>${debout} / ${s.instances.length} instances</div>
+    <div><i class="${Date.now() - H.charge > 9e5 ? 'att' : ''}"></i>Données ${H.ilya(H.charge)}</div>
+    <div class="sous" style="padding-left:17px">version ${G.esc(s.versionMain || '—')}</div>`;
   try { localStorage.setItem('hub.vue', location.hash); } catch { /* rien */ }
 };
 
@@ -134,7 +148,10 @@ H.recharger = async (silencieux = false) => {
 
 H.demarrer = async () => {
   const nav = document.getElementById('nav');
-  nav.innerHTML = H.ordre.map((id) => (id ? `<button data-id="${id}" title="${H.vues[id].nom}"><svg viewBox="0 0 24 24">${ICONES[id]}</svg>${H.vues[id].nom}</button>` : '<hr>')).join('');
+  nav.innerHTML = H.ordre.map((id) => (H.vues[id] ? `<button data-id="${id}" title="${H.vues[id].nom}"><svg viewBox="0 0 24 24">${ICONES[id]}</svg>${H.vues[id].nom}</button>` : `<h6>${id}</h6>`)).join('');
+  const nouvelle = document.getElementById('nouvelle-tache');
+  nouvelle.hidden = H.enLigne;
+  nouvelle.onclick = () => H.vues.taches.nouvelle();
   nav.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { H.aller(b.dataset.id); window.scrollTo(0, 0); } });
 
   const main = document.getElementById('vue');
@@ -146,7 +163,7 @@ H.demarrer = async () => {
   main.addEventListener('keydown', (e) => {
     if (e.target.id !== 'noter' || e.key !== 'Enter' || !e.target.value.trim()) return;
     const texte = e.target.value.trim(); e.target.value = '';
-    H.essayer(() => H.api('POST', 'boite', { texte, projet: 'sitescope' }), 'Noté dans la boîte à notes');
+    H.essayer(() => H.api('POST', 'boite', { texte, projet: 'sitescope' }), 'Noté dans la boîte à notes').then(() => H.vues.taches.relire());
   });
   document.getElementById('volet').addEventListener('click', (e) => { if (e.target.closest('.fermer')) H.fermerVolet(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') H.fermerVolet(); });
