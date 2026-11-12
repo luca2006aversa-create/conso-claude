@@ -377,3 +377,7 @@ select.champ{border-radius:999px}
 .ag-g-ech{position:absolute;top:5px;width:12px;height:12px;margin-left:-6px;background:var(--c);transform:rotate(45deg);border:2px solid var(--surface);z-index:2}
 .ag-g-date{position:absolute;top:5px;margin-left:10px;font-size:10px;color:var(--encre-2);white-space:nowrap;z-index:2}
 @media (max-width:700px){.carte.ag{order:-1}.ag-grille{grid-template-columns:34px repeat(var(--n),minmax(0,1fr))}.ag-case{min-height:64px}.ag-m-ev{display:none}.ag-case::after{content:"";}.ag-leg{display:none}}
+
+/* Agenda sur une seule page : écart entre les blocs */
+.grille.ag-suite{margin-top:14px}
+.lien[data-defiler]{cursor:pointer}

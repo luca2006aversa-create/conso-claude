@@ -15,7 +15,6 @@
 
   const V = H.vues.agenda = {
     nom: 'Agenda',
-    onglets: [['', 'Semaine'], ['mois', 'Mois'], ['frise', 'Dans le temps']],
     vivant: true,
     pastille() {
       if (!H.d || !H.d.agenda) return 0;
@@ -55,9 +54,10 @@
     },
 
     rendre(onglet) {
-      const tete = H.entete('Agenda', { onglets: this.onglets, actif: onglet, base: 'agenda', droite: H.enLigne ? '' : '<button class="btn p petit" id="ag-nouveau">+ Rendez-vous</button>' });
+      const tete = H.entete('Agenda', { droite: H.enLigne ? '' : '<button class="btn p petit" id="ag-nouveau">+ Rendez-vous</button>' });
       if (!H.d.agenda) return `${tete}<div class="carte c12">${G.vide('Pas encore d\'agenda dans cette copie', '!')}</div>`;
-      return tete + (onglet === 'mois' ? this.mois() : onglet === 'frise' ? this.frise() : this.semaine());
+      // Tout sur la même page : la semaine, ce qui arrive, le mois, puis les tâches dans le temps.
+      return tete + this.semaine() + this.frise('ligne') + this.mois() + this.frise('taches');
     },
 
     /* ================= Semaine ================= */
@@ -98,8 +98,8 @@
       return `<div class="grille">
   <div class="carte kpi c4"><h2>Prochain</h2>${prochain ? `<div class="chiffre" style="font-size:24px">${prochain.debut ? prochain.debut : 'journée'}<small>${prochain.jour === auj ? "aujourd'hui" : 'demain'}</small></div>
     <div class="sous"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${G.V(this.cat(prochain.categorie).couleur)};margin-right:6px"></i>${esc(prochain.titre)}${prochain.lieu ? ` · ${esc(prochain.lieu)}` : ''}</div>` : G.vide("Rien aujourd'hui ni demain")}</div>
-  <div class="carte kpi c4 lien" data-aller="agenda/frise"><h2>Échéances cette semaine</h2><div class="chiffre">${semaine.length}<small>tâche${semaine.length > 1 ? 's' : ''}</small></div><div class="sous">${semaine.slice(0, 2).map((t) => `#${t.id} · ${H.dateCourte(t.echeance)}`).join(' · ') || '—'}</div></div>
-  <div class="carte kpi c4 lien" data-aller="agenda/frise"><h2>En retard</h2><div class="chiffre" style="${retard.length ? 'color:var(--rouge)' : ''}">${retard.length}<small>échéance${retard.length > 1 ? 's' : ''} dépassée${retard.length > 1 ? 's' : ''}</small></div><div class="sous">${retard.slice(0, 3).map((t) => `#${t.id}`).join(' · ') || 'rien en retard'}</div></div>
+  <div class="carte kpi c4 lien" data-defiler="ag-taches"><h2>Échéances cette semaine</h2><div class="chiffre">${semaine.length}<small>tâche${semaine.length > 1 ? 's' : ''}</small></div><div class="sous">${semaine.slice(0, 2).map((t) => `#${t.id} · ${H.dateCourte(t.echeance)}`).join(' · ') || '—'}</div></div>
+  <div class="carte kpi c4 lien" data-defiler="ag-taches"><h2>En retard</h2><div class="chiffre" style="${retard.length ? 'color:var(--rouge)' : ''}">${retard.length}<small>échéance${retard.length > 1 ? 's' : ''} dépassée${retard.length > 1 ? 's' : ''}</small></div><div class="sous">${retard.slice(0, 3).map((t) => `#${t.id}`).join(' · ') || 'rien en retard'}</div></div>
   <div class="carte c12 ag">
     <div class="ag-barre"><span class="seg"><button data-dec="-1" title="Avant">‹</button><button data-dec="0">Aujourd'hui</button><button data-dec="1" title="Après">›</button></span><b>${titre}</b>
       <span class="ag-leg">${H.d.agenda.categories.map((c) => `<span><i style="background:${G.V(c.couleur)}"></i>${esc(c.nom)}</span>`).join('')}</span></div>
@@ -121,7 +121,7 @@
       const evs = this.evenements(debut, fin), reps = this.reperes(debut, fin);
       const nomMois = new Date(`${premier}T12:00:00`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
       const cases = Array.from({ length: 42 }, (_, i) => plus(debut, i));
-      return `<div class="grille"><div class="carte c12 ag">
+      return `<div class="grille ag-suite"><div class="carte c12 ag-m">
     <div class="ag-barre"><span class="seg"><button data-mois="-1">‹</button><button data-mois="0">Ce mois</button><button data-mois="1">›</button></span><b style="text-transform:capitalize">${nomMois}</b></div>
     <div class="ag-mois">${['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'].map((j) => `<div class="ag-jsem">${j}</div>`).join('')}
       ${cases.map((j) => { const items = [...evs.filter((x) => x.jour === j).map((x) => `<div class="ag-m-ev" style="--c:${G.V(this.cat(x.categorie).couleur)}" data-ev="${esc(x.id)}" data-jour="${j}">${x.debut ? `<em>${x.debut}</em> ` : ''}${esc(x.titre)}</div>`),
@@ -131,24 +131,21 @@
     },
 
     /* ================= Dans le temps ================= */
-    frise() {
+    frise(partie) {
       const auj = H.jour(), d = H.d, a = plus(auj, -21), b = plus(auj, 63);
       const ouvertes = d.taches.liste.filter((t) => !['fait', 'abandon'].includes(t.statut));
       // 1. Ce qui arrive : la ligne temporelle (façon Atlas Planètes).
       const arrive = [...this.reperes(auj, plus(auj, 120)).filter((x) => x.type === 'tache' && x.icone !== '▸' || x.type === 'atlas'),
-        ...this.evenements(auj, plus(auj, 120)).filter((x) => !x.repete).map((x) => ({ jour: x.jour, titre: x.titre, c: this.cat(x.categorie).couleur }))].sort((x, y) => x.jour.localeCompare(y.jour));
+        ...this.evenements(auj, plus(auj, 120)).filter((x) => !x.repete && (x.categorie !== 'cours' || /EXAMEN|RENDU/.test(x.titre))).map((x) => ({ jour: x.jour, titre: x.titre, c: this.cat(x.categorie).couleur }))].sort((x, y) => x.jour.localeCompare(y.jour));
       // 2. Les tâches dans le temps : de leur début (ou création) à leur échéance (ou aujourd'hui).
       const noms = Object.fromEntries((d.taches.projets || []).map((p) => [p.id, p.nom])), nomP = (t) => noms[t.projet] || t.projet;
       const lignes = ouvertes.filter((t) => t.echeance || t.debut || t.statut === 'en_cours')
         .concat(d.taches.liste.filter((t) => t.statut === 'fait' && t.fait_le && t.fait_le >= plus(auj, -14) && (t.echeance || t.debut)))
         .sort((x, y) => (nomP(x) || '').localeCompare(nomP(y) || '') || String(x.echeance || '9999').localeCompare(String(y.echeance || '9999')));
       const sans = ouvertes.filter((t) => t.statut === 'en_cours' && !t.echeance).length;
-      return `<div class="grille">
-  ${G.kpi('Avec une échéance', String(ouvertes.filter((t) => t.echeance).length), 'tâches ouvertes', null, 'vif', 'c4')}
-  ${G.kpi('En cours sans échéance', String(sans), sans ? 'clique une barre pour en poser une' : 'tout est daté', null, 'orange', 'c4')}
-  ${G.kpi('Rendez-vous', String(this.evenements(auj, plus(auj, 6)).length), 'dans les 7 jours', null, 'accent', 'c4')}
-  <div class="carte c12"><h2>Ce qui arrive<em>${arrive.length} dates dans les 4 mois</em></h2>${this.ligne(arrive)}</div>
-  <div class="carte c12"><h2>Les tâches dans le temps<em>3 semaines en arrière · 9 semaines devant</em></h2>${lignes.length ? this.gantt(lignes, a, b) : G.vide('Aucune tâche datée : ouvre une tâche et pose une échéance', '⏱')}
+      if (partie === 'ligne') return `<div class="grille ag-suite"><div class="carte c12"><h2>Ce qui arrive<em>${arrive.length} dates dans les 4 mois</em></h2>${this.ligne(arrive)}</div></div>`;
+      return `<div class="grille ag-suite">
+  <div class="carte c12" id="ag-taches"><h2>Les tâches dans le temps<em>3 semaines en arrière · 9 semaines devant${sans ? ` · ${sans} en cours sans échéance` : ''}</em></h2>${lignes.length ? this.gantt(lignes, a, b) : G.vide('Aucune tâche datée : ouvre une tâche et pose une échéance', '⏱')}
     ${G.legende([['orange', 'en cours'], ['accent', 'à faire'], ['vert', 'faite'], ['rouge', 'échéance dépassée']])}</div>
 </div>`;
     },
@@ -254,8 +251,9 @@
         if (!k) e.mois = H.mois(); else { const d = new Date(`${e.mois}-15T12:00:00`); d.setMonth(d.getMonth() + k); e.mois = H.mois(d); } H.rendre(); }; });
       vue.querySelectorAll('[data-ev]').forEach((x) => { x.onclick = (ev) => { ev.stopPropagation(); this.formulaire(H.d.agenda.evenements.find((y) => y.id === x.dataset.ev), x.dataset.jour); }; });
       vue.querySelectorAll('[data-repere]').forEach((x) => { x.onclick = (ev) => { ev.stopPropagation(); this.ouvrirRepere(x.dataset.repere, x.dataset.rid); }; });
+      vue.querySelectorAll('[data-defiler]').forEach((x) => { x.onclick = () => document.getElementById(x.dataset.defiler)?.scrollIntoView({ block: 'start' }); });
       vue.querySelectorAll('[data-tache]').forEach((x) => { x.onclick = () => H.vues.taches.ouvrir(Number(x.dataset.tache)); });
-      vue.querySelectorAll('[data-semaine]').forEach((x) => { x.onclick = () => { e.debut = H.lundi(x.dataset.semaine); e.depuis3 = x.dataset.semaine; H.aller('agenda'); }; });
+      vue.querySelectorAll('[data-semaine]').forEach((x) => { x.onclick = () => { e.debut = H.lundi(x.dataset.semaine); e.depuis3 = x.dataset.semaine; H.rendre(); setTimeout(() => document.querySelector('.carte.ag')?.scrollIntoView({ block: 'start' }), 60); }; });
       if (H.enLigne) return;
       // Clic dans un créneau vide : nouveau rendez-vous à cette heure (arrondie à la demi-heure).
       vue.querySelectorAll('.ag-col').forEach((col) => { col.onclick = (ev) => {
