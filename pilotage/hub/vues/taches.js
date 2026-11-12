@@ -136,7 +136,7 @@
       return `<article class="fiche tcarte" draggable="${!H.enLigne}" tabindex="0" data-id="${t.id}" style="--c:${this.coulCat(t.categorie)}">
         <div class="meta"><span>#${t.id}</span>${this.e.projet === 'tous' ? `<span>· ${esc(this.nomDe('projets', t.projet))}</span>` : ''}${t.statut === 'fait' && t.fait_le ? `<span>· ${dateFr(t.fait_le)}</span>` : ''}</div>
         <div class="titre">${esc(t.titre)}</div>
-        <div class="bas">${qui}${prio}${t.categorie ? `<span class="puce">${esc(this.nomDe('categories', t.categorie))}</span>` : ''}${t.chantiers.map((x) => `<span class="puce">${esc(x)}</span>`).join('')}${t.notes.length ? `<span class="sous">${t.notes.length} note${t.notes.length > 1 ? 's' : ''}</span>` : ''}</div></article>`;
+        <div class="bas">${t.echeance && !['fait', 'abandon'].includes(t.statut) ? `<span class="puce" style="${t.echeance < H.jour() ? 'border-color:var(--rouge);color:var(--rouge)' : 'border-color:var(--vif);color:var(--vif)'}">⏱ ${H.dateCourte(t.echeance)}</span>` : ''}${qui}${prio}${t.categorie ? `<span class="puce">${esc(this.nomDe('categories', t.categorie))}</span>` : ''}${t.chantiers.map((x) => `<span class="puce">${esc(x)}</span>`).join('')}${t.notes.length ? `<span class="sous">${t.notes.length} note${t.notes.length > 1 ? 's' : ''}</span>` : ''}</div></article>`;
     },
     tableau() {
       const taches = this.filtrees(), rang = (t) => ORDRE_PRIO.indexOf(t.priorite);
@@ -243,7 +243,8 @@
       H.volet(`<div id="t-fiche">
         <div class="t-haut"><span class="statut-t" style="--c:${G.V(COUL[t.statut] || 'encre-3')}">#${t.id}</span><span>· créée le ${dateFr(t.cree)}</span>${t.fait_le ? `<span>· faite le ${dateFr(t.fait_le)}</span>` : ''}</div>
         <textarea id="t-titre" rows="1" data-champ="titre" aria-label="Titre"${ro ? ' readonly' : ''}>${esc(t.titre)}</textarea>
-        <div class="champs">${champ('Statut', 'statuts', t.statut)}${champ('Priorité', 'priorites', t.priorite)}${champ('Catégorie', 'categories', t.categorie)}${champ('Projet', 'projets', t.projet)}${champ('Qui agit ?', 'qui', t.qui || '')}</div>
+        <div class="champs">${champ('Statut', 'statuts', t.statut)}${champ('Priorité', 'priorites', t.priorite)}${champ('Catégorie', 'categories', t.categorie)}${champ('Projet', 'projets', t.projet)}${champ('Qui agit ?', 'qui', t.qui || '')}
+          <label>Début<input class="champ" type="date" data-champ="debut" value="${esc(t.debut || '')}"${bloque}></label><label>Échéance<input class="champ" type="date" data-champ="echeance" value="${esc(t.echeance || '')}"${bloque}></label></div>
         ${raccourcis ? `<div class="boutons">${raccourcis}</div>` : ''}
         ${ro ? (liens ? `<div class="sous" style="margin-top:10px">${esc(liens)}</div>` : '') : `<details class="plus-champs"${t.depend_de.length || t.conflit_avec.length ? ' open' : ''}><summary>${esc(liens || 'Chantiers, branche, liens')}</summary><div class="champs-2">
           <label>Chantiers<input class="champ" data-champ="chantiers" data-liste value="${esc(t.chantiers.join(', '))}" placeholder="ex. Mise en ligne, Carnet"></label>

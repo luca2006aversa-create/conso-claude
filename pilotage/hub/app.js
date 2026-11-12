@@ -5,7 +5,7 @@
 const H = window.H = {
   d: null,                 // toutes les données (/api/hub/tout)
   vues: {},                // id -> { nom, icone, rendre(onglet), apres(onglet), plein, vivant, pastille() }
-  ordre: ['Le site', 'cockpit', 'argent', 'clients', 'serveurs', 'extractions', 'Le travail', 'taches', 'atelier', 'conso', 'Projet à part', 'atlas'],
+  ordre: ['Mon temps', 'agenda', 'Le site', 'cockpit', 'argent', 'clients', 'serveurs', 'extractions', 'Le travail', 'taches', 'atelier', 'conso', 'Projet à part', 'atlas'],
   enLigne: !!(window.HUB_CONFIG && window.HUB_CONFIG.url),
   charge: 0,               // heure du dernier chargement réussi
   etat: {},                // ce que les vues veulent garder d'un affichage à l'autre (globe, curseurs, filtres)
@@ -94,6 +94,7 @@ H.entete = (titre, { onglets = null, actif = '', base = '', droite = '' } = {}) 
 };
 
 const ICONES = {
+  agenda: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4M7.5 14h2M11 14h2M14.5 14h2M7.5 17.5h2M11 17.5h2"/>',
   cockpit: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
   argent: '<path d="M3 17l5-5 4 3 8-9"/><path d="M15 6h5v5"/>',
   clients: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6M16 5a3.5 3.5 0 010 6.5M18 14c2 .8 3.2 2.8 3.5 6"/>',
