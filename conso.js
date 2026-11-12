@@ -332,24 +332,39 @@ function chaleur(el, us, c, d0) {
 function courbeLimite(el, us) {
   const W = largeur(el), H = 200, m = { l: 40, r: 12, t: 10, b: 24 };
   const X = (j) => m.l + ((W - m.l - m.r) * j) / 7;
-  const Y = (p) => m.t + (H - m.t - m.b) * (1 - p / 100);
-  let s = axeY(W, H, m, 100, (v) => `${v} %`);
+  const sems = us.map((u) => [u, semaineEnCours(u)]).filter(([, sem]) => sem);
+  // Après une réinitialisation offerte, la courbe continue au-dessus de 100 % : l'axe s'allonge.
+  const sommet = Math.max(100, ...sems.map(([, sem]) => Math.max(...sem.cumuls)));
+  const pas = sommet > 150 ? 50 : 25;
+  const max = Math.ceil(sommet / pas) * pas;
+  const Y = (p) => m.t + (H - m.t - m.b) * (1 - p / max);
+  let s = '';
+  for (let v = 0; v <= max; v += pas) {
+    s += `<line class="${v === 0 || (v === 100 && max > 100) ? 'axe' : 'grille'}" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"/>`;
+    s += `<text x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v} %</text>`;
+  }
   for (let j = 0; j <= 7; j++) s += `<text x="${X(j)}" y="${H - 6}" text-anchor="middle">j${j}</text>`;
   s += `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(7)}" y2="${Y(100)}" stroke="var(--muet)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
-  let rien = true;
-  for (const u of us) {
-    const sem = semaineEnCours(u);
-    if (!sem) continue;
-    rien = false;
+  const heure = (t) => `${dateLongue(new Date(t))} ${pad(new Date(t).getHours())} h ${pad(new Date(t).getMinutes())}`;
+  for (const [u, sem] of sems) {
     const debut = Date.parse(sem.reset) - 7 * JOUR_MS;
-    const pts = sem.releves.map((r) => [X(Math.max(0, (r.t - debut) / JOUR_MS)), Y(r.pct), r]);
+    const Xt = (t) => X(Math.max(0, (t - debut) / JOUR_MS));
+    // Le moment de bascule : un trait vertical pointillé à chaque réinitialisation.
+    for (const b of sem.bascules) {
+      const x = Xt(b.t);
+      s += `<line x1="${x}" x2="${x}" y1="${m.t}" y2="${Y(0)}" stroke="${couleur(u)}" stroke-width="1.5" stroke-dasharray="2 4"/>`;
+      s += `<line data-info="${esc(`<b>${esc(nom(u))} · réinitialisation</b><div class="l"><span>${heure(b.t)}</span></div><div class="l"><span>Avant</span><b>${Math.round(b.avant)} %</b></div>`)}" x1="${x}" x2="${x}" y1="${m.t}" y2="${Y(0)}" stroke="transparent" stroke-width="12"/>`;
+    }
+    const pts = sem.releves.map((r, i) => [Xt(r.t), Y(sem.cumuls[i]), r, sem.cumuls[i]]);
     s += `<path d="M${X(0)},${Y(0)} L${pts.map((p) => `${p[0]},${p[1]}`).join(' L')}" fill="none" stroke="${couleur(u)}" stroke-width="2" stroke-linejoin="round"/>`;
     const [x, y] = pts[pts.length - 1];
     s += `<circle cx="${x}" cy="${y}" r="5" fill="${couleur(u)}" stroke="var(--surface)" stroke-width="2"/>`;
-    for (const [px, py, r] of pts) {
-      s += `<circle data-info="${esc(`<b>${esc(nom(u))}</b><div class="l"><span>${dateLongue(new Date(r.t))} ${pad(new Date(r.t).getHours())} h ${pad(new Date(r.t).getMinutes())}</span></div><div class="l"><span>Limite hebdo</span><b>${Math.round(r.pct)} %</b></div>`)}" cx="${px}" cy="${py}" r="8" fill="transparent"/>`;
+    for (const [px, py, r, cumul] of pts) {
+      const ligneCumul = cumul > r.pct ? `<div class="l"><span>Cumul de la semaine</span><b>${Math.round(cumul)} %</b></div>` : '';
+      s += `<circle data-info="${esc(`<b>${esc(nom(u))}</b><div class="l"><span>${heure(r.t)}</span></div><div class="l"><span>Limite hebdo</span><b>${Math.round(r.pct)} %</b></div>${ligneCumul}`)}" cx="${px}" cy="${py}" r="8" fill="transparent"/>`;
     }
   }
+  const rien = !sems.length;
   el.innerHTML = rien ? '' : `<svg xmlns="${NS}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${s}</svg>`;
 }
 
@@ -357,8 +372,21 @@ function semaineEnCours(u) {
   const rel = D.limites.filter((r) => r.uuid === u);
   const der = rel[rel.length - 1];
   if (!der?.reset || Date.parse(der.reset) < Date.now()) return null;
-  return { reset: der.reset, dernier: der, releves: rel.filter((r) => r.reset && Math.abs(Date.parse(r.reset) - Date.parse(der.reset)) < 3600000) };
+  const releves = rel.filter((r) => r.reset && Math.abs(Date.parse(r.reset) - Date.parse(der.reset)) < 3600000);
+  // Réinitialisation offerte en cours de semaine : le % retombe sans que la date de remise
+  // change. On garde ce qui était déjà consommé pour que la courbe continue de monter.
+  let decalage = 0;
+  const bascules = [];
+  const cumuls = releves.map((r, i) => {
+    const avant = releves[i - 1];
+    if (avant && chute(avant, r)) { decalage += avant.pct; bascules.push({ t: r.t, avant: avant.pct }); }
+    return r.pct + decalage;
+  });
+  return { reset: der.reset, dernier: der, releves, cumuls, bascules, cumul: der.pct + decalage };
 }
+
+// Une vraie remise à zéro, pas le petit flottement d'un relevé à l'autre (1 à 3 pts).
+function chute(a, b) { return b.pct < a.pct - 5; }
 
 // Points de limite hebdo consommés chaque jour, par compte (d'après les relevés).
 // Une hausse entre deux relevés compte pour le jour du second ; après une remise à zéro,
@@ -373,7 +401,7 @@ function limiteParJour() {
     for (let i = 1; i < rel.length; i++) {
       const a = rel[i - 1], b = rel[i];
       const memeSemaine = a.reset && b.reset && Math.abs(Date.parse(a.reset) - Date.parse(b.reset)) < 3600000;
-      const hausse = memeSemaine ? Math.max(0, b.pct - a.pct) : b.pct;
+      const hausse = memeSemaine && !chute(a, b) ? Math.max(0, b.pct - a.pct) : b.pct;
       const k = cleJ(new Date(b.t));
       m[k] = (m[k] || 0) + hausse;
     }
@@ -442,7 +470,7 @@ function blocLimites(us) {
     const ecart = Math.round(r.pct - ecoule * 100);
     const cinq = r.r5 && Date.parse(r.r5) > Date.now()
       ? `<div class="tete" style="margin-top:6px"><span>Limite 5 h</span><b>${Math.round(r.p5)} %</b></div><div class="jauge"><span style="width:${Math.min(100, r.p5)}%;background:${couleur(u)};opacity:.6"></span></div><div class="pied">Remise à ${pad(new Date(r.r5).getHours())} h ${pad(new Date(r.r5).getMinutes())}</div>` : '';
-    return `<div class="limite"><div class="tete"><span>${point(u)}${esc(nom(u))} · limite hebdo</span><b>${Math.round(r.pct)} %</b></div>
+    return `<div class="limite"><div class="tete"><span>${point(u)}${esc(nom(u))} · limite hebdo</span><b>${Math.round(r.pct)} %${sem.cumul > r.pct ? ` <small>(cumul ${Math.round(sem.cumul)} %)</small>` : ''}</b></div>
       <div class="jauge"><span style="width:${Math.min(100, r.pct)}%;background:${couleur(u)}"></span><em style="left:${ecoule * 100}%" title="Rythme régulier"></em></div>
       <div class="pied">Remise ${dateLongue(reset)} à ${pad(reset.getHours())} h · ${ecart > 0 ? `${ecart} pts d'avance sur le rythme régulier` : ecart < 0 ? `${-ecart} pts de marge sous le rythme régulier` : 'pile au rythme régulier'} · relevé ${dateCourte(new Date(r.t))} ${pad(new Date(r.t).getHours())} h</div>${cinq}</div>`;
   }).join('');
@@ -668,6 +696,10 @@ async function lireEnLigne() {
 }
 
 async function charger() {
+  if (EN_LIGNE?.desactive) { // page en pause : aucune requête vers Supabase
+    $('#contenu').innerHTML = '<p class="vide">Page Conso en pause pour le moment.</p>';
+    return;
+  }
   try {
     if (EN_LIGNE) {
       const j = await lireEnLigne();
@@ -711,7 +743,7 @@ document.addEventListener('change', (e) => { if (e.target.id === 'jour-date') ch
 let attente;
 addEventListener('resize', () => { clearTimeout(attente); attente = setTimeout(afficher, 150); });
 sombre.addEventListener('change', afficher);
-setInterval(charger, 2 * 60000);
+if (!EN_LIGNE?.desactive) setInterval(charger, 2 * 60000);
 // Revenir sur l'appli (téléphone) : recharger tout de suite.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) charger(); });
 let horsLigne = false;
