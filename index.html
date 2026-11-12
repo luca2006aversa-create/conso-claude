@@ -1,33 +1,5 @@
 <!doctype html>
-<html lang="fr">
-<head>
-  <meta name="robots" content="noindex">
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#17181a" media="(prefers-color-scheme: dark)">
-  <title>Conso Claude</title>
-  <link rel="icon" href="icone-conso-192.png" type="image/png" sizes="192x192">
-  <link rel="icon" href="icone-conso.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icone-conso-192.png">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="conso.css">
-</head>
-<body>
-  <header class="entete">
-    <div class="ligne-haut">
-      <h1 class="marque"><img src="icone-conso.svg" alt="" width="22" height="22">Conso Claude</h1>
-      <nav class="vues" id="onglets" aria-label="Comptes"></nav>
-      <span class="maj" id="maj"></span>
-    </div>
-  </header>
-
-  <main class="conso" id="contenu"><p class="vide">Lecture des transcriptions…</p></main>
-
-  <div class="infobulle" id="infobulle" role="tooltip" hidden></div>
-  <div class="toast" id="toast" role="status" hidden></div>
-  <script src="config.js"></script>
-  <script src="conso.js"></script>
-</body>
-</html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Pilotage</title>
+<script>location.replace('pilotage/' + (/[#&]k=/.test(location.hash) ? location.hash : '#conso'));</script>
+</head><body style="font-family:sans-serif;padding:24px">La Conso est maintenant dans le <a href="pilotage/#conso">pilotage</a>.</body></html>

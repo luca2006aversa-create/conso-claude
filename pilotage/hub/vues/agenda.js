@@ -1,5 +1,5 @@
 // Agenda : semaine (heures), mois, et frise (les dates qui arrivent + les tâches dans le temps, façon ligne temporelle
-// d'Atlas). Les rendez-vous sont dans donnees/hub/agenda.json ; les échéances des tâches, les dates d'Atlas Planètes et
+// d'Atlas). Les rendez-vous sont dans donnees/hub/agenda.json ; les échéances des tâches, les dates d'Kibsu et
 // les relances (Atlas, agences) sont lues à leur place et posées sur le calendrier.
 'use strict';
 
@@ -134,7 +134,7 @@
     frise(partie) {
       const auj = H.jour(), d = H.d, a = plus(auj, -21), b = plus(auj, 63);
       const ouvertes = d.taches.liste.filter((t) => !['fait', 'abandon'].includes(t.statut));
-      // 1. Ce qui arrive : la ligne temporelle (façon Atlas Planètes).
+      // 1. Ce qui arrive : la ligne temporelle (façon Kibsu).
       const arrive = [...this.reperes(auj, plus(auj, 120)).filter((x) => x.type === 'tache' && x.icone !== '▸' || x.type === 'atlas'),
         ...this.evenements(auj, plus(auj, 120)).filter((x) => !x.repete && (x.categorie !== 'cours' || /EXAMEN|RENDU/.test(x.titre))).map((x) => ({ jour: x.jour, titre: x.titre, c: this.cat(x.categorie).couleur }))].sort((x, y) => x.jour.localeCompare(y.jour));
       // 2. Les tâches dans le temps : de leur début (ou création) à leur échéance (ou aujourd'hui).

@@ -1,11 +1,11 @@
-// Atlas Planètes : un espace à part, sans lien avec Ašru. Le cap (où en est le projet d'un coup d'œil), la feuille
+// Kibsu : un espace à part, sans lien avec Ašru. Le cap (où en est le projet d'un coup d'œil), la feuille
 // de route en 3 paliers, le carnet de contacts (de « repéré » à « en échange ») et le journal de bord.
 // Les courriels ne partent jamais d'ici : on note ce qui a été envoyé ou reçu.
 'use strict';
 
 H.vues.atlas = {
-  nom: 'Atlas Planètes',
-  onglets: [['', 'Cap'], ['feuille', 'Feuille de route'], ['contacts', 'Contacts'], ['journal', 'Journal']],
+  nom: 'Kibsu',
+  onglets: [['', 'Cap'], ['feuille', 'Feuille de route'], ['contacts', 'Contacts'], ['journal', 'Journal'], ['kibsu', 'Refonte']],
   pastille() {
     const a = H.d.atlas; if (!a) return 0;
     const auj = H.jour(), dans3 = H.jour(Date.now() + 3 * 864e5);
@@ -14,9 +14,9 @@ H.vues.atlas = {
 
   rendre(onglet) {
     const a = H.d.atlas;
-    const tete = H.entete('Atlas Planètes', { onglets: this.onglets, actif: onglet, base: 'atlas', droite: this.lienAtlas(true) });
-    if (!a) return `${tete}<div class="carte c12">${G.vide("Pas de données d'Atlas Planètes", '!')}</div>`;
-    return tete + ({ feuille: () => this.feuille(), contacts: () => this.contacts(), journal: () => this.journal() }[onglet] || (() => this.cap()))();
+    const tete = H.entete('Kibsu', { onglets: this.onglets, actif: onglet, base: 'atlas', droite: this.lienAtlas(true) });
+    if (!a) return `${tete}<div class="carte c12">${G.vide("Pas de données d'Kibsu", '!')}</div>`;
+    return tete + ({ feuille: () => this.feuille(), contacts: () => this.contacts(), journal: () => this.journal(), kibsu: () => this.kibsu() }[onglet] || (() => this.cap()))();
   },
 
   lienAtlas(petit) {
@@ -141,6 +141,73 @@ H.vues.atlas = {
       ${H.enLigne ? '' : `<span class="a-outils"><button class="suppr" data-note-etape title="Ajouter ou changer la note">✎</button><button class="suppr" data-retirer-etape title="Retirer">×</button></span>`}</div>`;
   },
 
+  /* ================= Kibsu : la refonte de l'atlas ================= */
+  kibsu() {
+    const a = H.d.atlas, k = a.kibsu || [], ph = a.phases || [], vivantes = k.filter((e) => e.statut !== 'plus_tard');
+    const faits = k.filter((e) => e.statut === 'fait').length, enCours = k.filter((e) => e.statut === 'en_cours');
+    const prochaines = k.filter((e) => e.statut === 'a_faire').slice(0, 3);
+    const ordre = ['en_cours', 'a_faire', 'fait', 'plus_tard'];
+    const maq = ((a.liens || {}).atlasLocal || '').replace(/atlas\/?$/, '') + 'refonte/maquettes/accueil.html';
+    const coulPhase = (id) => G.V((ph.find((p) => p.id === id) || { couleur: 'encre-3' }).couleur);
+    return `<div class="grille">
+  <div class="carte c3"><h2>Avancement</h2><div class="anneaux">${G.anneau(vivantes.length ? faits / vivantes.length * 100 : 0, 'vert', 'fait', `${faits}/${vivantes.length}`)}</div>
+    <div class="sous" style="text-align:center">${k.length - vivantes.length} pour plus tard</div></div>
+  <div class="carte c5"><h2>Le parcours</h2>${this.parcours(k, ph)}</div>
+  <div class="carte c4"><h2>Maintenant</h2>
+    ${enCours.concat(prochaines).slice(0, 3).map((e) => `<div style="display:flex;gap:8px;align-items:baseline;margin-bottom:8px"><i style="flex:none;width:10px;height:10px;border-radius:50%;background:${coulPhase(e.phase)}"></i><span>${G.esc(e.titre)}</span></div>`).join('') || G.vide('Rien en attente', '✓')}
+    ${H.enLigne ? '' : `<div class="boutons" style="margin-top:10px"><a class="btn" href="${G.esc(maq)}" target="_blank" rel="noopener">Voir les maquettes ↗</a></div>`}</div>
+  <div class="carte c12"><h2>Versions et branches<em>${G.esc((a.versions || {}).courante || '')}</em></h2>${this.versionsGraphe(a.versions || {})}</div>
+  ${ph.map((p) => {
+    const dans = k.filter((e) => e.phase === p.id).sort((x, y) => ordre.indexOf(x.statut) - ordre.indexOf(y.statut));
+    const n = (s) => dans.filter((e) => e.statut === s).length;
+    return `<div class="carte c3" style="border-top:4px solid ${G.V(p.couleur)}"><h2>${G.esc(p.nom)}<em>${n('fait')}/${dans.length}</em></h2>
+      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--trait);margin-bottom:10px">${a.statuts.map((s) => (n(s.id) ? `<i style="flex:${n(s.id)};background:${G.V(s.couleur)}"></i>` : '')).join('')}</div>
+      ${dans.map((e) => this.ligneKibsu(e)).join('') || G.vide('Aucune étape')}
+      ${H.enLigne ? '' : `<form class="ligne-form a-kibsu" data-phase="${p.id}" style="margin-top:10px"><input class="champ" name="titre" placeholder="Nouvelle étape…" required><button class="btn petit" type="submit">+</button></form>`}</div>`;
+  }).join('')}
+</div>`;
+  },
+
+  parcours(k, ph) {
+    const w = 400, h = 96, pas = w / ph.length;
+    return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto" role="img" aria-label="Parcours de la refonte">
+      <line x1="${pas / 2}" y1="34" x2="${w - pas / 2}" y2="34" stroke="var(--trait)" stroke-width="4"/>
+      ${ph.map((p, i) => {
+        const dans = k.filter((e) => e.phase === p.id), f = dans.filter((e) => e.statut === 'fait').length, cx = pas * i + pas / 2;
+        const fini = dans.length && f === dans.length;
+        return `<circle cx="${cx}" cy="34" r="22" fill="${fini ? G.V('vert') : 'var(--carte, #fff)'}" stroke="${G.V(p.couleur)}" stroke-width="4"/>
+          <text x="${cx}" y="40" text-anchor="middle" font-size="16" font-weight="700" fill="${fini ? '#fff' : 'currentColor'}">${f}/${dans.length}</text>
+          <text x="${cx}" y="82" text-anchor="middle" font-size="13" fill="currentColor">${G.esc(p.nom)}</text>`;
+      }).join('')}</svg>`;
+  },
+
+  versionsGraphe(v) {
+    const c = v.commits || [];
+    if (!c.length) return G.vide('Pas de dépôt git trouvé', '!');
+    const W = 900, pas = Math.min(220, (W - 160) / Math.max(1, c.length - 1)), x0 = 90, y = 90;
+    const noeuds = c.map((m, i) => {
+      const x = x0 + i * pas, refs = m.refs.map((r, j) => {
+        const tag = r.startsWith('tag: '), nom = tag ? r.slice(5) : r, cour = nom === v.courante;
+        const col = tag ? G.V('orange') : G.V('violet'), larg = nom.length * 8 + 30, yy = y - 28 - j * 28;
+        return `<g><rect x="${x - larg / 2}" y="${yy - 16}" width="${larg}" height="24" rx="12" fill="${cour ? col : 'none'}" stroke="${col}" stroke-width="2"/>
+          <text x="${x}" y="${yy}" text-anchor="middle" font-size="13" font-weight="600" fill="${cour ? '#1d2433' : 'currentColor'}">${tag ? '◆ ' : ''}${G.esc(nom)}</text></g>`;
+      }).join('');
+      return `<g><title>${G.esc(m.msg)}</title><circle cx="${x}" cy="${y}" r="9" fill="currentColor"/>${refs}
+        <text x="${x}" y="${y + 28}" text-anchor="middle" font-size="12" fill="currentColor" opacity=".7">${G.esc(m.date)}</text>
+        <text x="${x}" y="${y + 44}" text-anchor="middle" font-size="12" fill="currentColor">${G.esc(m.msg.length > 28 ? `${m.msg.slice(0, 27)}…` : m.msg)}</text></g>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${W} 150" style="width:100%;height:auto" role="img" aria-label="Versions et branches"><line x1="${x0}" y1="${y}" x2="${x0 + (c.length - 1) * pas}" y2="${y}" stroke="var(--trait)" stroke-width="4"/>${noeuds}</svg>
+      <div class="sous">${v.sale ? `${v.sale} fichier(s) modifié(s), pas encore enregistré(s)` : 'Tout est enregistré'}${H.enLigne ? '' : ' · revenir à la v1 : git checkout v1 (dossier prospective-planetes)'}</div>`;
+  },
+
+  ligneKibsu(e) {
+    const a = H.d.atlas, s = a.statuts.find((x) => x.id === e.statut) || a.statuts[2];
+    return `<div class="a-ligne${e.statut === 'fait' ? ' fait' : ''}" data-kibsu-id="${G.esc(e.id)}">
+      ${H.enLigne ? `<span class="a-st" style="--c:${G.V(s.couleur)}">${s.nom}</span>` : `<select class="a-st" data-statut-kibsu style="--c:${G.V(s.couleur)}" aria-label="Statut">${a.statuts.map((x) => `<option value="${x.id}"${x.id === e.statut ? ' selected' : ''}>${x.nom}</option>`).join('')}</select>`}
+      <span class="t">${G.esc(e.titre)}${e.date ? ` <span class="sous">· ${H.dateCourte(e.date)}</span>` : ''}${e.note ? `<small>${G.esc(e.note)}</small>` : ''}</span>
+      ${H.enLigne ? '' : `<span class="a-outils"><button class="suppr" data-note-kibsu title="Note">✎</button><button class="suppr" data-retirer-kibsu title="Retirer">×</button></span>`}</div>`;
+  },
+
   /* ================= Contacts ================= */
   carte(c) {
     const auj = H.jour(), cat = H.d.atlas.categories.find((x) => x.id === c.categorie) || { couleur: 'encre-3', nom: '' };
@@ -263,6 +330,17 @@ H.vues.atlas = {
       if (await H.essayer(() => H.api('DELETE', `hub/atlas/feuille/${encodeURIComponent(b.closest('[data-etape-id]').dataset.etapeId)}`))) recharger('Étape retirée'); }; });
     vue.querySelectorAll('form.a-etape').forEach((f) => { f.onsubmit = async (ev) => { ev.preventDefault();
       if (await H.essayer(() => H.api('POST', 'hub/atlas/feuille', { palier: Number(f.dataset.palier), titre: f.titre.value }))) recharger('Étape ajoutée'); }; });
+
+    // Kibsu : statut, note, retirer, ajouter.
+    vue.querySelectorAll('[data-statut-kibsu]').forEach((s) => { s.onclick = (ev) => ev.stopPropagation();
+      s.onchange = async () => { const id = s.closest('[data-kibsu-id]').dataset.kibsuId; if (await H.essayer(() => H.api('PUT', `hub/atlas/kibsu/${encodeURIComponent(id)}`, { statut: s.value }))) recharger(s.value === 'fait' ? "Bravo, c'est fait" : 'Statut changé'); }; });
+    vue.querySelectorAll('[data-note-kibsu]').forEach((b) => { b.onclick = async (ev) => { ev.stopPropagation(); const id = b.closest('[data-kibsu-id]').dataset.kibsuId, et = a.kibsu.find((x) => x.id === id);
+      const note = prompt('Note (vide pour effacer) :', et.note || ''); if (note === null) return;
+      if (await H.essayer(() => H.api('PUT', `hub/atlas/kibsu/${encodeURIComponent(id)}`, { note }))) recharger(); }; });
+    vue.querySelectorAll('[data-retirer-kibsu]').forEach((b) => { b.onclick = async (ev) => { ev.stopPropagation(); if (!confirm('Retirer cette étape ?')) return;
+      if (await H.essayer(() => H.api('DELETE', `hub/atlas/kibsu/${encodeURIComponent(b.closest('[data-kibsu-id]').dataset.kibsuId)}`))) recharger('Étape retirée'); }; });
+    vue.querySelectorAll('form.a-kibsu').forEach((f) => { f.onsubmit = async (ev) => { ev.preventDefault();
+      if (await H.essayer(() => H.api('POST', 'hub/atlas/kibsu', { phase: f.dataset.phase, titre: f.titre.value }))) recharger('Étape ajoutée'); }; });
 
     // Dates, journal de bord.
     const ech = document.getElementById('a-echeance');
