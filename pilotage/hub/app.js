@@ -41,6 +41,7 @@ H.charger = async () => {
     H.d = await rep.json(); H.charge = Date.now(); H.source = 'pc';
     return H.d;
   }
+  if (HUB_CONFIG.desactive) throw new Error('Hub en ligne en pause pour le moment.'); // aucune requête vers Supabase
   const jeton = jetonLecture();
   if (!jeton) throw new Error("Lien incomplet : ouvre une première fois l'adresse complète (avec #k=…).");
   try {
@@ -196,12 +197,12 @@ H.demarrer = async () => {
     H.rendre();
   } catch (e) {
     main.innerHTML = `<div class="carte c12" style="max-width:520px;margin:60px auto">${G.vide(e.message, '!')}</div>`;
-    if (H.enLigne) H.demanderLien(main, e.message);
+    if (H.enLigne && !HUB_CONFIG.desactive) H.demanderLien(main, e.message);
   }
 
   // Relit les données chaque minute ; ne redessine que les vues « vivantes », et jamais pendant une saisie.
   setInterval(async () => {
-    if (document.hidden) return;
+    if (document.hidden || (H.enLigne && HUB_CONFIG.desactive)) return;
     const occupe = document.getElementById('volet').classList.contains('ouvert') || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
     const ok = await H.recharger(true);
     if (ok && !occupe && H.vues[H.vueActive]?.vivant) H.rendre();
