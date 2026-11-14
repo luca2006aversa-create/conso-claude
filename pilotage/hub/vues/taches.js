@@ -78,6 +78,7 @@
       const e = this.e, q = e.recherche.trim().toLowerCase();
       return this.D.taches.filter((t) => {
         if (e.projet !== 'tous' && t.projet !== e.projet) return false;
+        if (!H.garder(H.espaceProjet(t.projet))) return false;
         if (e.categorie && t.categorie !== e.categorie) return false;
         if (e.priorite && t.priorite !== e.priorite) return false;
         if (e.chantier && !t.chantiers.includes(e.chantier)) return false;
@@ -98,7 +99,7 @@
     /* ---------- Page ---------- */
     rendre(onglet) {
       this.onglet = onglet;
-      return `${H.entete('Tâches', { onglets: this.onglets, actif: onglet, base: 'taches' })}
+      return `${H.entete('Tâches', { onglets: this.onglets, actif: onglet, base: 'taches', filtre: true })}
         <div id="t-zone"><div class="filtres" id="t-filtres"></div><div class="avance" id="t-avance"></div><div id="t-contenu"><div class="attente">Chargement…</div></div></div>`;
     },
     apres() {
@@ -120,7 +121,7 @@
     peindre() {
       const e = this.e, c = this.C();
       const ordre = ['fait', 'a_valider', 'en_cours', 'en_pause', 'a_faire', 'idee'];
-      document.getElementById('t-avance').innerHTML = ['', 'priorites'].includes(this.onglet) ? c.projets.filter((p) => e.projet === 'tous' || p.id === e.projet).map((p) => {
+      document.getElementById('t-avance').innerHTML = ['', 'priorites'].includes(this.onglet) ? c.projets.filter((p) => (e.projet === 'tous' || p.id === e.projet) && H.garder(H.espaceProjet(p.id))).map((p) => {
         const tp = this.D.taches.filter((t) => t.projet === p.id && t.statut !== 'abandon'); if (!tp.length) return '';
         const n = (s) => tp.filter((t) => t.statut === s).length;
         return `<div class="p"><div class="tete"><strong>${esc(p.nom)}</strong><span>${n('fait')} / ${tp.length}</span></div>

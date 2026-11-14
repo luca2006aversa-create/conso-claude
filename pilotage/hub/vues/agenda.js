@@ -28,7 +28,9 @@
     // Les rendez-vous, répétitions comprises : [{ ...événement, jour }].
     evenements(a, b) {
       const r = [];
+      const tacheEsp = (id) => H.espaceProjet((H.d.taches.liste.find((t) => t.id === id) || {}).projet);
       for (const e of H.d.agenda.evenements) {
+        if (!H.garder(H.espaceCat(e.categorie) || (e.tache ? tacheEsp(e.tache) : ''))) continue;
         if (!e.repete) { if (e.date >= a && e.date <= b) r.push({ ...e, jour: e.date }); continue; }
         let j = e.date > a ? e.date : a;
         j = plus(j, (new Date(`${e.date}T12:00:00`).getDay() - new Date(`${j}T12:00:00`).getDay() + 7) % 7);
@@ -40,13 +42,19 @@
     reperes(a, b) {
       const d = H.d, auj = H.jour(), r = [];
       for (const t of d.taches.liste) {
+        if (!H.garder(H.espaceProjet(t.projet))) continue;
         const ouverte = !['fait', 'abandon'].includes(t.statut);
         if (t.echeance && t.echeance >= a && t.echeance <= b && t.statut !== 'abandon') r.push({ jour: t.echeance, type: 'tache', id: t.id, titre: `#${t.id} ${t.titre}`, c: !ouverte ? 'vert' : t.echeance < auj ? 'rouge' : 'vif', icone: !ouverte ? '✓' : '⏱' });
         if (t.debut && t.debut >= a && t.debut <= b && ouverte) r.push({ jour: t.debut, type: 'tache', id: t.id, titre: `début #${t.id} ${t.titre}`, c: 'encre-3', icone: '▸' });
       }
-      for (const e of (d.atlas || {}).echeances || []) if (e.date >= a && e.date <= b) r.push({ jour: e.date, type: 'atlas', titre: e.titre, c: 'rose', icone: '★' });
-      for (const c of (d.atlas || {}).contacts || []) if (c.relance && c.etape !== 'ecarte' && c.relance >= a && c.relance <= b) r.push({ jour: c.relance, type: 'atlas-contact', id: c.id, titre: `relancer ${c.nom}`, c: 'rose', icone: '↻' });
-      for (const c of d.clients.liste) if (c.relance && !['client', 'ecarte'].includes(c.etape) && c.relance >= a && c.relance <= b) r.push({ jour: c.relance, type: 'client', id: c.id, titre: `relancer ${c.nom}`, c: 'orange', icone: '↻' });
+      if (H.garder('kibsu')) for (const c of (d.atlas || {}).concours || []) {
+        if (['refuse', 'abandon'].includes(c.etat)) continue;
+        if (c.limite && c.limite >= a && c.limite <= b) r.push({ jour: c.limite, type: 'concours', id: c.id, titre: `limite : ${c.nom}`, c: 'violet', icone: '⚑' });
+        if (c.date && c.date >= a && c.date <= b) r.push({ jour: c.date, type: 'concours', id: c.id, titre: c.nom, c: 'violet', icone: '★' });
+      }
+      if (H.garder('kibsu')) for (const e of (d.atlas || {}).echeances || []) if (e.date >= a && e.date <= b) r.push({ jour: e.date, type: 'atlas', titre: e.titre, c: 'rose', icone: '★' });
+      if (H.garder('kibsu')) for (const c of (d.atlas || {}).contacts || []) if (c.relance && c.etape !== 'ecarte' && c.relance >= a && c.relance <= b) r.push({ jour: c.relance, type: 'atlas-contact', id: c.id, titre: `relancer ${c.nom}`, c: 'rose', icone: '↻' });
+      if (H.garder('asru')) for (const c of d.clients.liste) if (c.relance && !['client', 'ecarte'].includes(c.etape) && c.relance >= a && c.relance <= b) r.push({ jour: c.relance, type: 'client', id: c.id, titre: `relancer ${c.nom}`, c: 'orange', icone: '↻' });
       return r;
     },
     pilule(x) {
@@ -54,7 +62,7 @@
     },
 
     rendre(onglet) {
-      const tete = H.entete('Agenda', { droite: H.enLigne ? '' : '<button class="btn p petit" id="ag-nouveau">+ Rendez-vous</button>' });
+      const tete = H.entete('Agenda', { filtre: true, droite: H.enLigne ? '' : '<button class="btn p petit" id="ag-nouveau">+ Rendez-vous</button>' });
       if (!H.d.agenda) return `${tete}<div class="carte c12">${G.vide('Pas encore d\'agenda dans cette copie', '!')}</div>`;
       // Tout sur la même page : la semaine, ce qui arrive, le mois, puis les tâches dans le temps.
       return tete + this.semaine() + this.frise('ligne') + this.mois() + this.frise('taches');
@@ -238,6 +246,7 @@
       if (type === 'atlas-contact') return H.vues.atlas.fiche(id);
       if (type === 'client') return H.vues.clients.fiche(id);
       if (type === 'atlas') return H.aller('atlas');
+      if (type === 'concours') return H.vues.atlas.ficheConcours(id);
     },
 
     /* ================= Gestes ================= */

@@ -15,8 +15,10 @@ H.vues.atelier = {
   },
 
   /* ================= Branches ================= */
-  branches() {
-    const h = H.d.historique, e = (H.etat.atelier ??= { filtre: 'tout', debuts: false }), enLigne = H.d.site.reglages.enLigne;
+  // Réutilisé par la vue Kibsu : o = { cle (état à part), titre, versionMain, enLigne }.
+  branches(h = H.d.historique, o = {}) {
+    this._h = h; this._cle = o.cle || 'atelier';
+    const e = (H.etat[this._cle] ??= { filtre: 'tout', debuts: false }), enLigne = o.enLigne || H.d.site.reglages.enLigne;
     if (h.erreur || !h.branches) return `<div class="carte c12">${G.vide(h.erreur || 'Historique indisponible', '!')}</div>`;
     const T = (iso) => new Date(iso).getTime(), COL = 22, X0 = 18, PAL = ['turquoise', 'vert', 'violet', 'rouge', 'orange', 'rose'];
     const duree = (a, b) => { const j = Math.round((T(b) - T(a)) / 864e5); return j <= 0 ? 'le jour même' : j === 1 ? '1 jour' : `${j} jours`; };
@@ -96,9 +98,9 @@ H.vues.atelier = {
     return `<div class="grille">
   ${G.kpi('Chantiers fusionnés', String(c.fusionnees), 'revenus dans main', parSemaine(h.branches.filter((b) => !b.ouverte).map((b) => b.fin)), 'vert', 'c3')}
   ${G.kpi('Chantiers ouverts', String(c.ouvertes), 'pas encore dans main', null, 'orange', 'c3')}
-  ${G.kpi('Versions', String(c.versions), `dernière : ${G.esc(H.d.site.versionMain || '')}`, parSemaine(h.evenements.filter((x) => x.type === 'version').map((x) => x.date)), 'accent', 'c3')}
+  ${G.kpi('Versions', String(c.versions), `dernière : ${G.esc((o.versionMain ?? H.d.site.versionMain) || '')}`, parSemaine(h.evenements.filter((x) => x.type === 'version').map((x) => x.date)), 'accent', 'c3')}
   ${G.kpi('Commits', G.nb(c.commits), `depuis le ${H.dateCourte(c.premier)} · ${duree(c.premier, c.dernier)}`, null, 'violet', 'c3')}
-  <div class="carte c12"><h2>L'histoire du site<em>le plus récent en haut · clique un chantier pour son détail</em></h2>
+  <div class="carte c12"><h2>${G.esc(o.titre || "L'histoire du site")}<em>le plus récent en haut · clique un chantier pour son détail</em></h2>
     <div class="boutons" style="margin-top:0;gap:14px"><span class="seg">${[['tout', 'Tout'], ['chantiers', 'Chantiers'], ['versions', 'Versions']].map(([id, nom]) => `<button data-filtre-arbre="${id}" class="${e.filtre === id ? 'actif' : ''}">${nom}</button>`).join('')}</span>
       <label class="sous" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="voir-debuts"${e.debuts ? ' checked' : ''}> débuts de branche</label>
       <div class="hi-leg" style="margin-left:auto"><span><i style="width:3px;height:14px;border-radius:2px;background:var(--encre)"></i>main</span><span><i style="background:var(--turquoise)"></i>chantier fusionné</span>
@@ -111,7 +113,7 @@ H.vues.atelier = {
 
   // Volet d'un chantier : ses chiffres, ses tâches, ses commits.
   detail(i) {
-    const b = H.d.historique.branches[i], T = (iso) => new Date(iso).getTime(), j = Math.max(0, Math.round((T(b.fin) - T(b.debut)) / 864e5));
+    const b = (this._h || H.d.historique).branches[i], T = (iso) => new Date(iso).getTime(), j = Math.max(0, Math.round((T(b.fin) - T(b.debut)) / 864e5));
     H.volet(`<div id="b-detail"><h2 class="nom">${G.esc(b.nom.replace(/^feature\//, ''))}</h2><div class="sous">${G.esc(b.titre || '')}</div>
       <div class="resultats" style="grid-template-columns:1fr 1fr;margin-top:12px"><div><span class="sous">État</span><b style="font-size:15px">${b.ouverte ? 'ouvert' : b.rapide ? 'fusionné (avance directe)' : 'fusionné'}</b></div>
         <div><span class="sous">Durée</span><b style="font-size:15px">${j ? `${j} j` : 'le jour même'}</b><span class="sous">${H.dateCourte(b.debut)} → ${H.dateCourte(b.fin)}</span></div>
@@ -173,9 +175,9 @@ H.vues.atelier = {
 
   apres(onglet) {
     const vue = document.getElementById('vue');
-    vue.querySelectorAll('[data-filtre-arbre]').forEach((b) => { b.onclick = () => { H.etat.atelier.filtre = b.dataset.filtreArbre; H.rendre(); }; });
+    vue.querySelectorAll('[data-filtre-arbre]').forEach((b) => { b.onclick = () => { H.etat[this._cle || 'atelier'].filtre = b.dataset.filtreArbre; H.rendre(); }; });
     const debuts = document.getElementById('voir-debuts');
-    if (debuts) debuts.onchange = () => { H.etat.atelier.debuts = debuts.checked; H.rendre(); };
+    if (debuts) debuts.onchange = () => { H.etat[this._cle || 'atelier'].debuts = debuts.checked; H.rendre(); };
     const graphe = vue.querySelector('.hi-graphe');
     if (graphe) graphe.onclick = (ev) => {
       const tache = ev.target.closest('[data-ouvrir]');

@@ -5,7 +5,8 @@
 const H = window.H = {
   d: null,                 // toutes les données (/api/hub/tout)
   vues: {},                // id -> { nom, icone, rendre(onglet), apres(onglet), plein, vivant, pastille() }
-  ordre: ['Mon temps', 'agenda', 'Le site', 'cockpit', 'argent', 'clients', 'serveurs', 'extractions', 'Le travail', 'taches', 'atelier', 'conso', 'Projet à part', 'atlas'],
+  // Trois espaces : ce qui sert aux deux projets, puis Ašru, puis Kibsu (un autre projet viendra s'ajouter ici).
+  ordre: ['Commun', 'agenda', 'cockpit', 'taches', 'contacts', 'conso', 'serveurs', 'Ašru', 'argent', 'clients', 'extractions', 'atelier', 'Kibsu', 'atlas'],
   enLigne: !!(window.HUB_CONFIG && window.HUB_CONFIG.url),
   charge: 0,               // heure du dernier chargement réussi
   etat: {},                // ce que les vues veulent garder d'un affichage à l'autre (globe, curseurs, filtres)
@@ -22,6 +23,15 @@ const MOIS_COURTS = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'ao�
 H.dateCourte = (iso) => { if (!iso) return ''; const [a, m, j] = String(iso).slice(0, 10).split('-').map(Number); return `${j} ${MOIS_COURTS[m - 1]}`; };
 H.moisCourt = (aaaamm) => MOIS_COURTS[Number(aaaamm.slice(5, 7)) - 1];
 H.ilya = (t) => { const s = Math.max(0, (Date.now() - new Date(t).getTime()) / 1000); return s < 90 ? "à l'instant" : s < 5400 ? `il y a ${Math.round(s / 60)} min` : s < 129600 ? `il y a ${Math.round(s / 3600)} h` : `il y a ${Math.round(s / 86400)} j`; };
+
+/* ---------- Espaces : Ašru, Kibsu (et ce qui n'appartient à aucun des deux : école, perso) ---------- */
+H.espaces = { asru: { nom: 'Ašru', couleur: 'orange' }, kibsu: { nom: 'Kibsu', couleur: 'violet' } };
+H.filtre = () => { if (!H.etat.espace) { let v = 'tout'; try { v = localStorage.getItem('hub.espace') || 'tout'; } catch { /* rien */ } H.etat.espace = H.espaces[v] ? v : 'tout'; } return H.etat.espace; };
+H.choisirEspace = (v) => { H.etat.espace = H.espaces[v] ? v : 'tout'; try { localStorage.setItem('hub.espace', H.etat.espace); } catch { /* rien */ } };
+H.espaceProjet = (p) => (/^sitescope$/i.test(p || '') ? 'asru' : /^kibsu$/i.test(p || '') ? 'kibsu' : '');
+H.espaceCat = (c) => ({ asru: 'asru', atlas: 'kibsu' }[c] || '');
+// « Tout » montre tout ; « Ašru » ou « Kibsu » ne montrent que ce qui appartient à ce projet.
+H.garder = (espace) => H.filtre() === 'tout' || espace === H.filtre();
 
 /* ---------- Données ---------- */
 function jetonLecture() {
@@ -83,11 +93,11 @@ H.essayer = async (action, ok) => { try { const r = await action(); if (ok) H.to
 H.volet = (html, large = false) => { const v = document.getElementById('volet'); v.innerHTML = `<button class="fermer" aria-label="Fermer">×</button>${html}`; v.classList.toggle('large', large); v.classList.add('ouvert'); };
 H.fermerVolet = () => { document.getElementById('volet').classList.remove('ouvert'); H.voletFerme && H.voletFerme(); H.voletFerme = null; };
 
-H.entete = (titre, { onglets = null, actif = '', base = '', droite = '' } = {}) => {
+H.entete = (titre, { onglets = null, actif = '', base = '', droite = '', filtre = false } = {}) => {
   const vieux = Date.now() - H.charge > (H.enLigne ? 3 * 3600e3 : 180e3);
   return `<div class="haut"><h1>${G.esc(titre)}</h1>
     ${onglets ? `<div class="onglets">${onglets.map(([id, nom]) => `<button data-aller="${base}/${id}" class="${id === actif ? 'actif' : ''}">${G.esc(nom)}</button>`).join('')}</div>` : ''}
-    <div class="droite">${droite}
+    <div class="droite">${filtre ? `<span class="seg seg-espace" title="Voir les deux projets, ou un seul">${[['tout', 'Tout', ''], ...Object.entries(H.espaces).map(([id, e]) => [id, e.nom, e.couleur])].map(([id, nom, c]) => `<button data-espace="${id}" class="${H.filtre() === id ? 'actif' : ''}">${c ? `<i style="background:${G.V(c)}"></i>` : ''}${nom}</button>`).join('')}</span>` : ''}${droite}
       ${H.enLigne ? '' : '<input class="noter" id="noter" placeholder="Noter une idée… (Entrée)" aria-label="Note rapide">'}
       <span class="frais${vieux ? ' vieux' : ''}" title="Source : ${G.esc(H.source || '')}"><i></i>${H.enLigne ? 'copie du PC, ' : ''}${H.ilya(H.charge)}</span>
       <button class="btn petit" id="rafraichir" title="Relire les données">↻</button>
@@ -105,6 +115,7 @@ const ICONES = {
   atelier: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10M18 11c0 4-6 3-12 5"/>',
   atlas: '<circle cx="12" cy="12" r="5.5"/><path d="M3.2 15.6c-1.6 1.6.4 3.1 4.6 2.1 3.4-.8 7.4-2.9 10.4-5.4 3.2-2.7 4.4-5.2 2.6-5.9-.8-.3-2 0-3.4.6"/>',
   conso: '<path d="M12 3a9 9 0 109 9h-9z"/><path d="M15 3.5A9 9 0 0120.5 9H15z"/>',
+  contacts: '<rect x="4" y="3" width="15" height="18" rx="2.5"/><circle cx="11.5" cy="10" r="2.6"/><path d="M7.5 17c.6-2.2 2.1-3.3 4-3.3s3.4 1.1 4 3.3M19 7h2M19 12h2"/>',
 };
 
 function route() {
@@ -119,6 +130,7 @@ H.rendre = (garderVolet = false) => {
   const vue = H.vues[id], main = document.getElementById('vue');
   if (garderVolet !== true) H.fermerVolet();
   main.classList.toggle('plein', !!(vue.plein && vue.plein(onglet)));
+  main.classList.toggle('sous-menu', !!vue.sousMenu);
   try {
     main.innerHTML = vue.rendre(onglet);
     main.querySelectorAll('iframe[data-incruste]').forEach((cadre) => { cadre.style.visibility = 'hidden';
@@ -128,8 +140,9 @@ H.rendre = (garderVolet = false) => {
   }
   catch (e) { console.error(e); main.innerHTML = `${H.entete(vue.nom)}<div class="carte c12">${G.vide(`Cette vue a rencontré une erreur : ${e.message}`, '!')}</div>`; }
   document.querySelectorAll('#nav button').forEach((b) => {
-    b.classList.toggle('actif', b.dataset.id === id);
-    const n = H.d && H.vues[b.dataset.id].pastille ? H.vues[b.dataset.id].pastille() : 0;
+    const sous = b.dataset.onglet !== undefined;
+    b.classList.toggle('actif', b.dataset.id === id && (!sous || b.dataset.onglet === onglet));
+    const n = !sous && H.d && H.vues[b.dataset.id].pastille ? H.vues[b.dataset.id].pastille() : 0;
     b.querySelector('b')?.remove();
     if (n) b.insertAdjacentHTML('beforeend', `<b>${n}</b>`);
   });
@@ -170,14 +183,25 @@ H.demanderLien = (main, message) => {
 
 H.demarrer = async () => {
   const nav = document.getElementById('nav');
-  nav.innerHTML = H.ordre.map((id) => (H.vues[id] ? `<button data-id="${id}" title="${H.vues[id].nom}"><svg viewBox="0 0 24 24">${ICONES[id]}</svg>${H.vues[id].nom}</button>` : `<h6>${id}</h6>`)).join('');
+  // Une vue qui a `sousMenu: true` affiche ses onglets sous son entrée, dans la barre de gauche (sur ordinateur).
+  const ESPACE_TITRE = { 'Ašru': 'asru', Kibsu: 'kibsu' };
+  nav.innerHTML = H.ordre.map((id, i) => {
+    const v = H.vues[id];
+    if (!v) { const e = H.espaces[ESPACE_TITRE[id]]; return `<h6${e ? ` class="espace" style="--c:${G.V(e.couleur)}"` : ''}>${id}</h6>`; }
+    // Sous un titre du même nom (Kibsu), l'entrée elle-même ne sert que sur téléphone : sur ordinateur, ses onglets suffisent.
+    const chef = v.sousMenu && H.ordre[i - 1] === v.nom ? ' class="chef"' : '';
+    const sous = v.sousMenu && v.onglets ? v.onglets.map(([o, nom]) => `<button class="sous-nav" data-id="${id}" data-onglet="${o}" title="${nom}">${nom}</button>`).join('') : '';
+    return `<button data-id="${id}"${chef} title="${v.nom}"><svg viewBox="0 0 24 24">${ICONES[id]}</svg>${v.nom}</button>${sous}`;
+  }).join('');
   const nouvelle = document.getElementById('nouvelle-tache');
   nouvelle.hidden = H.enLigne;
   nouvelle.onclick = () => H.vues.taches.nouvelle();
-  nav.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { H.aller(b.dataset.id); window.scrollTo(0, 0); } });
+  nav.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { H.aller(b.dataset.onglet !== undefined ? `${b.dataset.id}/${b.dataset.onglet}` : b.dataset.id); window.scrollTo(0, 0); } });
 
   const main = document.getElementById('vue');
   main.addEventListener('click', (e) => {
+    const esp = e.target.closest('[data-espace]');
+    if (esp) { H.choisirEspace(esp.dataset.espace); H.rendre(); return; }
     const a = e.target.closest('[data-aller]');
     if (a) { H.aller(a.dataset.aller); return; }
     if (e.target.closest('#rafraichir')) H.recharger().then((ok) => ok && H.toast('Données relues'));

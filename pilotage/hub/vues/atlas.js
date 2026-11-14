@@ -5,7 +5,11 @@
 
 H.vues.atlas = {
   nom: 'Kibsu',
-  onglets: [['', 'Cap'], ['feuille', 'Feuille de route'], ['contacts', 'Contacts'], ['journal', 'Journal'], ['kibsu', 'Refonte']],
+  sousMenu: true,
+  // Atelier et Comprendre : comme l'atelier d'Ašru (historique git du dépôt kibsu/, carte du code et des dossiers).
+  get onglets() { return [['', 'Cap'], ['projets', 'Projets'], ['concours', 'Concours et conférences'], ['feuille', 'Feuille de route'], ['contacts', 'Contacts'], ['journal', 'Journal'], ['kibsu', 'Refonte'],
+    ...(H.enLigne ? [] : [['atelier', 'Atelier'], ['comprendre', 'Comprendre']])]; },
+  plein: (onglet) => !H.enLigne && onglet === 'comprendre',
   pastille() {
     const a = H.d.atlas; if (!a) return 0;
     const auj = H.jour(), dans3 = H.jour(Date.now() + 3 * 864e5);
@@ -16,7 +20,15 @@ H.vues.atlas = {
     const a = H.d.atlas;
     const tete = H.entete('Kibsu', { onglets: this.onglets, actif: onglet, base: 'atlas', droite: this.lienAtlas(true) });
     if (!a) return `${tete}<div class="carte c12">${G.vide("Pas de données d'Kibsu", '!')}</div>`;
-    return tete + ({ feuille: () => this.feuille(), contacts: () => this.contacts(), journal: () => this.journal(), kibsu: () => this.kibsu() }[onglet] || (() => this.cap()))();
+    if (onglet === 'comprendre' && !H.enLigne) return `${tete}<iframe src="kibsu.html" data-incruste title="Comprendre Kibsu"></iframe>`;
+    if (onglet === 'atelier' && !H.enLigne) return tete + this.atelier();
+    return tete + ({ projets: () => this.projets(), concours: () => this.concours(), feuille: () => this.feuille(), contacts: () => this.contacts(), journal: () => this.journal(), kibsu: () => this.kibsu() }[onglet] || (() => this.cap()))();
+  },
+
+  atelier() {
+    const h = H.d.atlas.historique || {};
+    const v = (h.evenements || []).find((x) => x.type === 'version');
+    return H.vues.atelier.branches(h, { cle: 'atelierKibsu', titre: "L'histoire de Kibsu", versionMain: v ? v.nom : '—', enLigne: {} });
   },
 
   lienAtlas(petit) {
@@ -309,9 +321,11 @@ H.vues.atlas = {
   },
 
   /* ================= Gestes ================= */
-  apres() {
+  apres(onglet) {
     const vue = document.getElementById('vue'), a = H.d.atlas, e = (H.etat.atlas ??= { cat: '', cherche: '' });
     if (!a) return;
+    if (onglet === 'atelier') { H.vues.atelier.apres(''); return; }
+    if (onglet === 'projets' || onglet === 'concours') { this.apresProjets(); return; }
     const recharger = async (msg) => { if (await H.recharger(true)) { H.rendre(); if (msg) H.toast(msg); } };
     vue.querySelectorAll('[data-fiche]').forEach((f) => { f.onclick = (ev) => { ev.stopPropagation(); this.fiche(f.dataset.fiche); }; });
     vue.querySelectorAll('[data-cat]').forEach((b) => { b.onclick = () => { e.cat = b.dataset.cat; H.rendre(); }; });

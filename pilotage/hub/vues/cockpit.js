@@ -18,7 +18,9 @@ H.vues.cockpit = {
     const sim = H.sim ? H.sim.projeter(d.argent.scenario) : null;
     const eq = sim ? sim.N.findIndex((v, i) => i > 0 && v > 0) : -1;
 
-    return `${H.entete('Cockpit')}
+    // Kibsu seul : son propre tableau de bord. « Tout » : celui d'Ašru, puis une rangée Kibsu.
+    if (H.filtre() === 'kibsu') return `${H.entete('Cockpit', { filtre: true })}${H.vues.atlas.cockpit()}`;
+    return `${H.entete('Cockpit', { filtre: true })}
 <div class="grille">
   <div class="carte kpi c3 lien" data-aller="atelier/versions"><h2>Version</h2><div class="chiffre">${G.esc(site.versionMain || '—')}<small>en travail</small></div>
     <div class="sous">en ligne : ${enLigne.url ? `<b class="plus">${G.esc(enLigne.version || 'oui')}</b>` : 'pas encore'}</div>${G.trait(versions21, 'accent')}</div>
@@ -65,6 +67,7 @@ H.vues.cockpit = {
       { x: sim.R.map((_, i) => `m${i}`), unite: ' €', h: 200, zero: true, marques: eq > 0 ? [{ i: eq, s: 2, t: 'équilibre', c: 'vert' }] : [] }) : ''}
     ${G.legende([['vert', 'revenus'], ['rouge', 'dépenses'], ['accent', 'ce qu\'il te reste']])}</div>
   <div class="carte c6 lien" data-aller="atelier"><h2>Dernières versions<em>survole un point</em></h2>${this.frise(versions.slice(0, 7).reverse(), enLigne)}</div>
+  ${H.filtre() === 'tout' ? H.vues.atlas.cockpit(true) : ''}
 </div>`;
   },
 
@@ -82,6 +85,7 @@ H.vues.cockpit = {
   },
 
   apres() {
+    if (H.filtre() === 'kibsu') return;
     const d = H.d, x = H.calc.extractions();
     const pc = d.site.reglages.serveurs.find((s) => s.etat !== 'prevu' && (s.lon || s.lat));
     const points = [

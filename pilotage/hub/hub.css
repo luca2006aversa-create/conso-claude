@@ -46,6 +46,10 @@ nav button{position:relative;display:flex;align-items:center;gap:10px;width:100%
 nav button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
 nav button:hover{color:var(--encre)}
 nav button.actif{background:var(--accent-doux);color:var(--encre);font-weight:600}
+nav button.sous-nav{padding:5px 9px 5px 35px;font-size:13px;font-weight:500;color:var(--encre-3)}
+nav button.sous-nav:hover{color:var(--encre)}
+nav button.sous-nav.actif{color:var(--encre);font-weight:600}
+@media (min-width:901px){main.sous-menu .haut .onglets{display:none}}
 nav button b{margin-left:auto;font-size:10.5px;font-weight:600;background:var(--vif);color:#fff;border-radius:10px;padding:0 6px;min-width:17px;text-align:center}
 .etat{margin-top:auto;font-size:12px;color:var(--encre-2);display:grid;gap:4px}
 .etat h6{margin:0 2px 3px}
@@ -298,6 +302,7 @@ select.champ{border-radius:999px}
   nav{flex-direction:row;overflow-x:auto;gap:2px}
   nav button{flex-direction:column;gap:3px;font-size:10.5px;min-width:64px;padding:6px 4px;text-align:center}
   nav button svg{width:20px;height:20px}
+  nav button.sous-nav{display:none}
   nav button b{position:absolute;top:2px;right:8px;margin:0}
   main{padding:16px 12px 60px}
   main.plein{height:calc(100vh - 58px)} main.plein .haut{padding:14px 12px 0}
@@ -381,3 +386,21 @@ select.champ{border-radius:999px}
 /* Agenda sur une seule page : écart entre les blocs */
 .grille.ag-suite{margin-top:14px}
 .lien[data-defiler]{cursor:pointer}
+
+/* Trois espaces : titres colorés dans la barre, filtre Tout / Ašru / Kibsu dans l'en-tête */
+nav h6.espace{display:flex;align-items:center;gap:6px;color:var(--encre-2);border-top:1px solid var(--trait);padding-top:12px;margin-top:14px}
+nav h6.espace::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+@media (min-width:901px){nav button.chef{display:none}}
+.seg-espace button{display:inline-flex;align-items:center;gap:5px}
+.seg-espace i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.ct-ligne{display:grid;grid-template-columns:34px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 6px;border-bottom:1px solid var(--trait);cursor:pointer}
+.ct-ligne:hover{background:var(--surface-2)}
+.ct-ligne small{display:block;color:var(--encre-3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ct-ligne .rond{width:30px;height:30px;font-size:11px}
+.kp-carte{cursor:pointer}
+.kp-puces{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.kp-puces span{font-size:12px;border:1px solid var(--trait);border-radius:999px;padding:2px 9px;background:var(--surface)}
+.kp-dates{display:flex;gap:12px;font-size:12px;color:var(--encre-3);margin:4px 0 6px}
+.kp-j{font-weight:600;color:var(--encre)}
+.kp-j.urgent{color:var(--vif)}
+@media (max-width:900px){.ct-ligne{grid-template-columns:30px minmax(0,1fr) auto}.ct-ligne .ct-relance{display:none}}
