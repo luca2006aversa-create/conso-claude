@@ -38,9 +38,10 @@
 
   const V = H.vues.taches = {
     nom: 'Tâches',
-    onglets: [['', 'Tableau'], ['priorites', 'Priorités'], ['notes', 'Notes'], ['activite', 'Activité']],
-    D: null, lu: 0, brut: '', ouverte: null, edition: false, depliees: new Set(), onglet: '',
-    e: Object.assign({ projet: 'tous', categorie: '', priorite: '', chantier: '', qui: '', recherche: '', faites: false },
+    onglets: [['', 'Tableau'], ['edition', 'Éditer'], ['priorites', 'Priorités'], ['notes', 'Notes'], ['activite', 'Activité']],
+    D: null, lu: 0, brut: '', ouverte: null, edition: false, depliees: new Set(), onglet: '', corbeille: null, file: Promise.resolve(),
+    // statutEd, ech et tri servent à l'onglet « Éditer » (statut, échéance, ordre de la liste).
+    e: Object.assign({ projet: 'tous', categorie: '', priorite: '', chantier: '', qui: '', recherche: '', faites: false, statutEd: 'ouvertes', ech: '', tri: 'echeance' },
       (() => { try { return JSON.parse(localStorage.getItem(MEMO) || '{}'); } catch { return {}; } })()),
     pastille: () => (H.d && H.d.taches.notes) || 0,
 
@@ -49,7 +50,7 @@
     tache(id) { return this.D.taches.find((t) => t.id === Number(id)); },
     options(liste, choisi) { return (this.C()[liste] || []).map((x) => `<option value="${esc(x.id)}"${x.id === choisi ? ' selected' : ''}>${esc(x.nom)}</option>`).join(''); },
     coulCat(id) { const i = (this.C().categories || []).findIndex((c) => c.id === id); return G.V(PAL[(i < 0 ? PAL.length - 1 : i) % PAL.length]); },
-    memoriser() { try { const { projet, categorie, priorite, chantier, qui } = this.e; localStorage.setItem(MEMO, JSON.stringify({ projet, categorie, priorite, chantier, qui })); } catch { /* rien */ } },
+    memoriser() { try { const { projet, categorie, priorite, chantier, qui, statutEd, ech, tri } = this.e; localStorage.setItem(MEMO, JSON.stringify({ projet, categorie, priorite, chantier, qui, statutEd, ech, tri })); } catch { /* rien */ } },
 
     /* ---------- Données ---------- */
     async charger(force = false) {
@@ -111,8 +112,19 @@
     filtres() {
       const e = this.e, c = this.C(), boite = document.getElementById('t-filtres'); if (!boite) return;
       const sel = (id, liste, valeur, vide) => `<select class="champ" data-filtre="${id}"><option value="">${vide}</option>${liste.map((x) => `<option value="${esc(x.id)}"${x.id === valeur ? ' selected' : ''}>${esc(x.nom)}</option>`).join('')}</select>`;
+      const projets = `<span class="seg">${[{ id: 'tous', nom: 'Tous' }, ...c.projets].map((p) => `<button data-projet="${esc(p.id)}" class="${p.id === e.projet ? 'actif' : ''}">${esc(p.nom)}</button>`).join('')}</span>`;
+      if (this.onglet === 'edition') {
+        // Onglet « Éditer » : projet, statut, échéance (avec le nombre de tâches dans chaque case), recherche.
+        const base = this.baseEd(), n = (id) => base.filter((t) => this.casEch(t, id)).length;
+        const ech = [['', 'Toutes'], ['retard', 'En retard'], ['semaine', '7 jours'], ['mois', '30 jours'], ['sans', 'Sans date']];
+        boite.innerHTML = `${projets}
+          <select class="champ" data-filtre="statutEd" aria-label="Statut"><option value="ouvertes"${e.statutEd === 'ouvertes' ? ' selected' : ''}>Pas finies</option><option value=""${e.statutEd === '' ? ' selected' : ''}>Tous les statuts</option>${c.statuts.map((s) => `<option value="${esc(s.id)}"${s.id === e.statutEd ? ' selected' : ''}>${esc(s.nom)}</option>`).join('')}</select>
+          <span class="seg seg-ech" aria-label="Échéance">${ech.map(([id, nom]) => `<button data-ech="${id}" class="${e.ech === id ? 'actif' : ''}${id === 'retard' && n('retard') ? ' rouge' : ''}">${nom}${id ? `<em>${n(id)}</em>` : ''}</button>`).join('')}</span>
+          <input class="champ" id="t-recherche" type="search" placeholder="Chercher… (mot ou #numéro)" value="${esc(e.recherche)}" style="flex:1 1 160px;border-radius:999px">`;
+        return;
+      }
       const chantiers = [...new Set(this.D.taches.flatMap((t) => t.chantiers))].sort((a, b) => a.localeCompare(b, 'fr'));
-      boite.innerHTML = `<span class="seg">${[{ id: 'tous', nom: 'Tous' }, ...c.projets].map((p) => `<button data-projet="${esc(p.id)}" class="${p.id === e.projet ? 'actif' : ''}">${esc(p.nom)}</button>`).join('')}</span>
+      boite.innerHTML = `${projets}
         ${c.categories.length ? sel('categorie', c.categories, e.categorie, 'Toutes catégories') : ''}${c.priorites.length ? sel('priorite', c.priorites, e.priorite, 'Toutes priorités') : ''}
         ${chantiers.length ? sel('chantier', chantiers.map((x) => ({ id: x, nom: x })), e.chantier, 'Tous chantiers') : ''}
         ${sel('qui', [{ id: 'toi', nom: 'À toi' }, { id: 'claude', nom: 'À Claude' }], e.qui, 'Peu importe qui')}
@@ -128,7 +140,111 @@
           <div class="barre">${ordre.map((s) => (n(s) ? `<i style="width:${100 * n(s) / tp.length}%;background:${G.V(COUL[s])}" title="${esc(this.nomDe('statuts', s))} : ${n(s)}"></i>` : '')).join('')}</div>
           <div class="tete"><span>${ordre.filter((s) => s !== 'fait' && n(s)).map((s) => `${n(s)} ${this.nomDe('statuts', s).toLowerCase()}`).join(' · ')}</span></div></div>`;
       }).join('') : '';
-      document.getElementById('t-contenu').innerHTML = ({ '': () => this.tableau(), priorites: () => this.priorites(), notes: () => this.notes(), activite: () => this.activite() }[this.onglet] || (() => this.tableau()))();
+      document.getElementById('t-contenu').innerHTML = ({ '': () => this.tableau(), edition: () => this.editer(), priorites: () => this.priorites(), notes: () => this.notes(), activite: () => this.activite() }[this.onglet] || (() => this.tableau()))();
+      if (this.onglet === 'edition' && !H.enLigne && !this.corbeille) this.chargerCorbeille();
+    },
+
+    /* ---------- Onglet « Éditer » : tout se modifie directement dans la liste ---------- */
+    // Les tâches du projet (et de l'espace) choisis, filtrées par statut et recherche ; le filtre d'échéance vient ensuite.
+    baseEd() {
+      const e = this.e, q = e.recherche.trim().toLowerCase();
+      return this.D.taches.filter((t) => {
+        if (e.projet !== 'tous' && t.projet !== e.projet) return false;
+        if (!H.garder(H.espaceProjet(t.projet))) return false;
+        if (e.statutEd === 'ouvertes' ? ['fait', 'abandon'].includes(t.statut) : (e.statutEd && t.statut !== e.statutEd)) return false;
+        if (!q) return true;
+        if (/^#?\d+$/.test(q)) return t.id === Number(q.replace('#', ''));
+        return q.split(/\s+/).every((mot) => [t.titre, ...t.chantiers].join(' ').toLowerCase().includes(mot));
+      });
+    },
+    enRetard(t) { return !!t.echeance && t.echeance < H.jour() && !['fait', 'abandon'].includes(t.statut); },
+    casEch(t, cas) {
+      const j = H.jour(), dans = (n) => H.jour(new Date(Date.now() + n * 864e5));
+      if (cas === 'retard') return this.enRetard(t);
+      if (cas === 'semaine') return !!t.echeance && t.echeance >= j && t.echeance <= dans(7);
+      if (cas === 'mois') return !!t.echeance && t.echeance >= j && t.echeance <= dans(30);
+      if (cas === 'sans') return !t.echeance;
+      return true;
+    },
+    trier(liste) {
+      const rang = (t) => ORDRE_PRIO.indexOf(t.priorite), ech = (t) => t.echeance || '9999';
+      const ordres = {
+        echeance: (a, b) => ech(a).localeCompare(ech(b)) || rang(a) - rang(b) || b.id - a.id,
+        priorite: (a, b) => rang(a) - rang(b) || ech(a).localeCompare(ech(b)) || b.id - a.id,
+        statut: (a, b) => ORDRE_STATUT.indexOf(a.statut) - ORDRE_STATUT.indexOf(b.statut) || ech(a).localeCompare(ech(b)) || b.id - a.id,
+        id: (a, b) => b.id - a.id,
+      };
+      return liste.sort(ordres[this.e.tri] || ordres.echeance);
+    },
+    ligneEd(t) {
+      const ro = H.enLigne, bloque = ro ? ' disabled' : '';
+      const sel = (champ, liste, nom) => `<select class="champ" data-ed="${champ}" aria-label="${nom} de #${t.id}"${bloque}>${this.options(liste, t[champ])}</select>`;
+      const date = (champ, nom) => `<label class="ed-d"><small>${nom}</small><input class="champ${champ === 'echeance' && this.enRetard(t) ? ' en-retard' : ''}" type="date" data-ed="${champ}" value="${esc(t[champ] || '')}" aria-label="${nom} de #${t.id}"${bloque}></label>`;
+      return `<div class="ed-ligne${t.id === this.derniere ? ' neuve' : ''}" data-id="${t.id}" style="--c:${G.V(COUL[t.statut] || 'encre-3')}">
+        <button class="ed-num" data-ouvrir="${t.id}" title="Ouvrir la fiche">#${t.id}</button>
+        <input class="champ ed-titre" data-ed="titre" value="${esc(t.titre)}" aria-label="Titre de #${t.id}"${ro ? ' readonly' : ''}>
+        ${sel('statut', 'statuts', 'Statut')}${sel('priorite', 'priorites', 'Priorité')}${sel('projet', 'projets', 'Projet')}${date('debut', 'Début')}${date('echeance', 'Échéance')}
+        <span class="ed-actions"><button class="btn-ic" data-ouvrir="${t.id}" title="Notes et détails">${H.icone('journal')}${t.notes.length ? `<small>${t.notes.length}</small>` : ''}</button>${ro ? '' : `<button class="btn-ic" data-jeter="${t.id}" title="Mettre à la corbeille">${H.icone('corbeille')}</button>`}</span></div>`;
+    },
+    editer() {
+      const ro = H.enLigne, c = this.C(), e = this.e;
+      const liste = this.trier(this.baseEd().filter((t) => this.casEch(t, e.ech)));
+      const colonnes = [['id', 'N°'], ['titre', 'Titre'], ['statut', 'Statut'], ['priorite', 'Priorité'], ['projet', 'Projet'], ['debut', 'Début'], ['echeance', 'Échéance']];
+      const tete = `<div class="ed-ligne ed-tete">${colonnes.map(([id, nom]) => (['id', 'statut', 'priorite', 'echeance'].includes(id)
+        ? `<button data-tri="${id}" class="${e.tri === id ? 'actif' : ''}" title="Trier par ${nom.toLowerCase()}">${nom}${e.tri === id ? ' ↓' : ''}</button>` : `<span>${nom}</span>`)).join('')}<span></span></div>`;
+      const projet = e.projet !== 'tous' ? e.projet : (c.projets.find((p) => H.garder(H.espaceProjet(p.id))) || c.projets[0] || {}).id;
+      const nouvelle = ro ? '' : `<form class="ed-ligne ed-nouvelle" id="ed-nouvelle" autocomplete="off">
+          <span class="ed-num">${H.icone('ajouter')}</span>
+          <input class="champ ed-titre" name="titre" placeholder="Nouvelle tâche : que faut-il faire ?" aria-label="Titre de la nouvelle tâche">
+          <select class="champ" name="statut" aria-label="Statut">${this.options('statuts', 'a_faire')}</select>
+          <select class="champ" name="priorite" aria-label="Priorité">${this.options('priorites', 'normal')}</select>
+          <select class="champ" name="projet" aria-label="Projet">${this.options('projets', projet)}</select>
+          <label class="ed-d"><small>Début</small><input class="champ" type="date" name="debut" aria-label="Début"></label>
+          <label class="ed-d"><small>Échéance</small><input class="champ" type="date" name="echeance" aria-label="Échéance"></label>
+          <span class="ed-actions"><button class="btn p petit" type="submit">Créer</button></span></form>`;
+      return `<div class="grille"><div class="carte c12 ed-carte">${nouvelle}${tete}
+          <div class="ed-liste">${liste.map((t) => this.ligneEd(t)).join('') || '<div class="sous" style="padding:14px 10px">Aucune tâche ici.</div>'}</div></div>
+        ${ro ? '' : `<details class="carte c12 ed-corbeille" id="ed-corbeille"${this.corbeilleOuverte ? ' open' : ''}><summary>${H.icone('corbeille')}Corbeille<em>${this.corbeille ? this.corbeille.length : ''}</em><small>récupérable</small></summary>
+          <div class="ed-jetees">${this.corbeilleHtml()}</div></details>`}</div>`;
+    },
+    corbeilleHtml() {
+      const l = this.corbeille;
+      if (!l) return '<div class="sous">Chargement…</div>';
+      if (!l.length) return '<div class="sous" style="padding:6px 4px">Vide.</div>';
+      return l.map((t) => `<div class="ed-jetee"><span class="ed-num">#${t.id}</span><span>${esc(t.titre)}</span><span class="sous cache-m">${esc(this.nomDe('projets', t.projet))} · ${dateFr(t.jete_le)}</span>
+        <button class="btn petit" data-restaurer="${t.id}">${H.icone('restaurer')}Remettre</button></div>`).join('');
+    },
+    async chargerCorbeille() {
+      if (H.enLigne) return;
+      try { const r = await H.api('GET', 'taches/corbeille'); this.corbeille = Array.isArray(r) ? r : (r.taches || []); } catch { this.corbeille = []; }
+      const boite = document.getElementById('ed-corbeille'); if (!boite) return;
+      boite.querySelector('summary em').textContent = this.corbeille.length;
+      boite.querySelector('.ed-jetees').innerHTML = this.corbeilleHtml();
+    },
+    // Enregistre un champ changé dans la liste sans la redessiner : la saisie suivante n'est pas coupée.
+    // Les enregistrements passent l'un après l'autre (file), chacun avec la version rendue par le précédent.
+    enregistrerEd(id, champs, el) {
+      this.file = this.file.then(async () => {
+        const t = this.tache(id); if (!t) return;
+        try {
+          Object.assign(t, await H.api('PUT', `taches/${id}`, { version: t.version, champs }));
+          const ligne = el.closest('.ed-ligne');
+          if (ligne) { ligne.style.setProperty('--c', G.V(COUL[t.statut] || 'encre-3')); ligne.querySelector('[data-ed="echeance"]')?.classList.toggle('en-retard', this.enRetard(t)); }
+          el.classList.add('ok'); setTimeout(() => el.classList.remove('ok'), 1400);
+          H.toast(`#${id} enregistrée`); H.recharger(true);
+        } catch (err) { H.toast(err.message, true); await this.relire(); }
+      });
+      return this.file;
+    },
+    async jeter(id) {
+      if (!(await H.essayer(() => H.api('DELETE', `taches/${id}`)))) return;
+      if (this.ouverte === Number(id)) H.fermerVolet();
+      await this.relire(); this.chargerCorbeille();
+      H.toast(`#${id} mise à la corbeille`, false, { nom: 'Annuler', faire: () => this.restaurer(id) });
+    },
+    async restaurer(id) {
+      if (!(await H.essayer(() => H.api('POST', `taches/${id}/restaurer`), `#${id} remise dans la liste`))) return;
+      await this.relire(); this.chargerCorbeille();
     },
 
     carte(t) {
@@ -186,6 +302,10 @@
         case 'boite': return `Note dans la boîte : « ${esc(String(ev.texte || '').slice(0, 160))} »`;
         case 'boite_modif': return `Note ${esc(ev.note)} modifiée`;
         case 'boite_suppr': return `Note ${esc(ev.note)} supprimée`;
+        case 'corbeille': return `#${esc(ev.tache)} ${esc(ev.titre || '')} — mise à la corbeille`;
+        case 'restauration': return `${t} — remise depuis la corbeille`;
+        case 'piece': case 'piece_suppr': { const n = /^t\d+$/.test(ev.cible || '') ? ev.cible.slice(1) : '';
+          return `${n ? `<span class="lien-t" data-ouvrir="${n}">#${n}</span> ` : ''}${esc(ev.titre || '')} — « ${esc(ev.nom || '')} » ${ev.action === 'piece' ? 'ajoutée' : 'retirée'}`; }
         default: return esc(ev.action);
       }
     },
@@ -233,7 +353,8 @@
       const ro = H.enLigne, c = this.C(), bloque = ro ? ' disabled' : '';
       const pause = t.statut === 'en_pause' ? '<button class="btn petit" data-raccourci="reprendre">Reprendre</button>' : (['fait', 'abandon'].includes(t.statut) ? '' : '<button class="btn petit" data-raccourci="en_pause">Mettre en pause</button>');
       const raccourcis = ro ? '' : [t.statut === 'a_valider' ? '<button class="btn petit p" data-raccourci="fait">✓ C\'est validé</button>' : '', pause,
-        !['fait', 'a_valider', 'abandon'].includes(t.statut) ? '<button class="btn petit discret" data-raccourci="abandon">Abandonner</button>' : ''].join('');
+        !['fait', 'a_valider', 'abandon'].includes(t.statut) ? '<button class="btn petit discret" data-raccourci="abandon">Abandonner</button>' : '',
+        `<button class="btn petit discret t-jeter" data-jeter="${t.id}" title="Mettre à la corbeille (récupérable)">${H.icone('corbeille')}Corbeille</button>`].join('');
       const sections = [...c.sections.map((titre) => t.sections.find((s) => s.titre === titre) || { titre, texte: '' }), ...t.sections.filter((s) => !c.sections.includes(s.titre))];
       this.sections = sections;
       const section = (s, i) => { const long = s.texte.length > 700 && !this.depliees.has(`${t.id}:${s.titre}`);
@@ -289,6 +410,15 @@
         const projet = c.closest('[data-projet]');
         if (projet) { this.e.projet = projet.dataset.projet; this.memoriser(); this.filtres(); this.peindre(); return; }
         if (c.closest('[data-faites]')) { this.e.faites = true; this.peindre(); return; }
+        const ech = c.closest('[data-ech]');
+        if (ech) { this.e.ech = ech.dataset.ech; this.memoriser(); this.filtres(); this.peindre(); return; }
+        const tri = c.closest('[data-tri]');
+        if (tri) { this.e.tri = tri.dataset.tri; this.memoriser(); this.peindre(); return; }
+        const jeter = c.closest('[data-jeter]');
+        if (jeter) { await this.jeter(jeter.dataset.jeter); return; }
+        const remettre = c.closest('[data-restaurer]');
+        if (remettre) { await this.restaurer(remettre.dataset.restaurer); return; }
+        if (c.closest('#ed-corbeille > summary')) { this.corbeilleOuverte = !c.closest('details').open; return; }
         const raccourci = c.closest('[data-raccourci]');
         if (raccourci) { const t = this.tache(this.ouverte); let vers = raccourci.dataset.raccourci;
           if (vers === 'reprendre') { const j = this.D.journal.find((x) => x.tache === t.id && x.champ === 'statut' && x.vers === 'en_pause'); vers = j && j.de && j.de !== 'en_pause' ? j.de : 'a_faire'; }
@@ -320,7 +450,10 @@
       zone.onchange = async (ev) => {
         const el = ev.target;
         if (el.matches('[data-fichier]')) { const cible = el.closest('.pieces').dataset.cible, fichiers = [...el.files]; el.value = ''; await this.envoyer(cible, fichiers); return; }
-        if (el.dataset.filtre) { this.e[el.dataset.filtre] = el.value; this.memoriser(); this.peindre(); return; }
+        if (el.dataset.filtre) { this.e[el.dataset.filtre] = el.value; this.memoriser(); if (this.onglet === 'edition') this.filtres(); this.peindre(); return; }
+        if (el.dataset.ed && !el.closest('#ed-nouvelle')) { const id = el.closest('.ed-ligne').dataset.id, valeur = el.value.trim();
+          if (el.dataset.ed === 'titre' && !valeur) { el.value = this.tache(id)?.titre || ''; return; }
+          await this.enregistrerEd(id, { [el.dataset.ed]: valeur }, el); return; }
         if (el.dataset.prio) { await this.enregistrer(el.dataset.prio, { champs: { priorite: el.value } }); return; }
         if (el.dataset.champ && this.ouverte) { let valeur = el.value.trim();
           if ('liste' in el.dataset) valeur = valeur.split(',').map((s) => s.trim().replace(/^#/, '')).filter(Boolean);
@@ -328,15 +461,22 @@
           await this.enregistrer(this.ouverte, { champs: { [el.dataset.champ]: valeur } }); }
       };
       zone.oninput = (ev) => {
-        if (ev.target.id === 't-recherche') { this.e.recherche = ev.target.value; this.peindre(); }
+        if (ev.target.id === 't-recherche') { this.e.recherche = ev.target.value; this.peindre();
+          if (this.onglet === 'edition') { const base = this.baseEd(); document.querySelectorAll('.seg-ech [data-ech] em').forEach((em) => { em.textContent = base.filter((t) => this.casEch(t, em.parentNode.dataset.ech)).length; }); } }
         if (ev.target.id === 't-titre') { ev.target.style.height = 'auto'; ev.target.style.height = `${ev.target.scrollHeight + 2}px`; }
       };
       zone.onkeydown = (ev) => {
         if (ev.key === 'Enter' && ev.target.id === 't-titre') { ev.preventDefault(); ev.target.blur(); }
+        if (ev.key === 'Enter' && ev.target.matches('.ed-liste [data-ed="titre"]')) { ev.preventDefault(); ev.target.blur(); }
+        if (ev.key === 'Escape' && ev.target.matches('.ed-liste [data-ed="titre"]')) { ev.target.value = this.tache(ev.target.closest('.ed-ligne').dataset.id)?.titre || ''; ev.target.blur(); }
         if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('.tcarte,.lignes .ligne')) { ev.preventDefault(); this.ouvrir(ev.target.dataset.id); }
       };
       zone.onsubmit = async (ev) => {
         const f = ev.target;
+        if (f.id === 'ed-nouvelle') { ev.preventDefault(); const titre = f.titre.value.trim(); if (!titre) { f.titre.focus(); return; }
+          const t = await H.essayer(() => H.api('POST', 'taches', { titre, statut: f.statut.value, priorite: f.priorite.value, projet: f.projet.value, debut: f.debut.value, echeance: f.echeance.value }), 'Tâche créée');
+          if (!t) return; this.derniere = t.id; await this.relire();
+          document.querySelector('#ed-nouvelle [name="titre"]')?.focus(); return; }
         if (f.id === 't-noter') { ev.preventDefault(); const texte = f.querySelector('textarea').value.trim(); if (!texte) return;
           await H.essayer(() => H.api('POST', 'boite', { texte, projet: this.e.projet === 'tous' ? '' : this.e.projet }), 'Noté'); await this.relire(); return; }
         if (f.classList.contains('lien-form')) { ev.preventDefault(); const url = f.querySelector('input').value.trim(); if (!url) return;

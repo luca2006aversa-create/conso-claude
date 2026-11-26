@@ -82,11 +82,31 @@ H.api = async (methode, chemin, corps) => {
 
 /* ---------- Interface commune ---------- */
 let minuterieToast = 0;
-H.toast = (texte, erreur = false) => {
+// `action` (facultatif) : { nom, faire } ajoute un bouton au message, par ex. « Annuler » après une mise à la corbeille.
+H.toast = (texte, erreur = false, action = null) => {
   const t = document.getElementById('toast');
   t.textContent = texte; t.hidden = false; t.classList.toggle('err', erreur);
-  clearTimeout(minuterieToast); minuterieToast = setTimeout(() => { t.hidden = true; }, erreur ? 6000 : 2500);
+  if (action) { const b = document.createElement('button'); b.className = 'toast-action'; b.textContent = action.nom;
+    b.onclick = () => { t.hidden = true; action.faire(); }; t.append(b); }
+  clearTimeout(minuterieToast); minuterieToast = setTimeout(() => { t.hidden = true; }, erreur || action ? 6000 : 2500);
 };
+
+// Petites icônes d'action au trait (même dessin que la charte, couleur du texte).
+const ICONES_ACTION = {
+  crayon: '<path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  corbeille: '<path d="M4 7h16M9.5 7V4.5h5V7M6 7l1 13h10l1-13M10 11v5.5M14 11v5.5"/>',
+  restaurer: '<path d="M4 12a8 8 0 108-8 8 8 0 00-5.7 2.3L4 8.6"/><path d="M4 4v4.6h4.6"/>',
+  ajouter: '<path d="M12 5v14M5 12h14"/>',
+  journal: '<path d="M6 3h11a1 1 0 011 1v16a1 1 0 01-1 1H6z"/><path d="M6 3v18M9.5 8h5M9.5 12h5M9.5 16h3"/>',
+  lien: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7L12 6.3"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
+  fichier: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+  horloge: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  lieu: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0113 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+  utilisateur: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0114 0"/>',
+  tache: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>',
+  texte: '<path d="M5 6h14M5 10h14M5 14h9M5 18h6"/>',
+};
+H.icone = (nom, titre = '') => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"${titre ? ` role="img"><title>${G.esc(titre)}</title>` : ' aria-hidden="true">'}${ICONES_ACTION[nom] || ''}</svg>`;
 // Lance une action qui écrit ; affiche l'erreur au lieu de la laisser passer en silence.
 H.essayer = async (action, ok) => { try { const r = await action(); if (ok) H.toast(ok); return r; } catch (e) { H.toast(e.message, true); return null; } };
 
@@ -196,6 +216,11 @@ H.demarrer = async () => {
   const nouvelle = document.getElementById('nouvelle-tache');
   nouvelle.hidden = H.enLigne;
   nouvelle.onclick = () => H.vues.taches.nouvelle();
+  // Gros bouton « Éditer les tâches » : ouvre l'onglet où tout se modifie directement dans la liste.
+  const editer = document.getElementById('editer-taches');
+  editer.hidden = H.enLigne;
+  editer.innerHTML = `${H.icone('crayon')}Éditer les tâches`;
+  editer.onclick = () => { H.aller('taches/edition'); window.scrollTo(0, 0); };
   nav.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { H.aller(b.dataset.onglet !== undefined ? `${b.dataset.id}/${b.dataset.onglet}` : b.dataset.id); window.scrollTo(0, 0); } });
 
   const main = document.getElementById('vue');

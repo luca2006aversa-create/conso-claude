@@ -67,8 +67,16 @@ function preparer() {
   for (const [u, hs] of Object.entries(D.heures)) {
     const m = (J[u] = {});
     for (const [h, v] of Object.entries(hs)) {
-      const x = (m[h.slice(0, 10)] ??= [0, 0, 0, 0]);
-      for (let i = 0; i < 4; i++) x[i] += v[i];
+      const x = (m[h.slice(0, 10)] ??= [0, 0, 0, 0, 0, 0]);
+      for (let i = 0; i < 6; i++) x[i] += v[i] ?? 0;
+    }
+  }
+  // Nature du contenu, séparée en « ce qui entre » et « ce que Claude écrit ».
+  D.entrees = {}; D.sorties = {};
+  for (const [u, js] of Object.entries(D.natures || {})) for (const [j, cats] of Object.entries(js)) {
+    for (const [k, v] of Object.entries(cats)) {
+      const cible = k.startsWith('s:') ? D.sorties : D.entrees;
+      ((cible[u] ??= {})[j] ??= {})[k.slice(2)] = v;
     }
   }
   LIM = limiteParJour();
@@ -259,6 +267,37 @@ function barresH(el, lignes, us) {
   el.innerHTML = lignes.length ? `<svg xmlns="${NS}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${s}</svg>` : '<p class="vide">Rien sur cette période.</p>';
 }
 
+// Types de tokens : deux barres à 100 % (volume, puis poids sur la limite).
+const TYPES = [
+  ['Relu du cache', 3, 0.1, '#9db8d9'],
+  ['Écrit dans le cache', 5, 1.25, '#2a78d6'],
+  ['Entrée neuve', 4, 1, '#1baf7a'],
+  ['Sortie (écrit par Claude)', 1, 5, '#eb6834'],
+];
+function repartition(el, us, d0, d1) {
+  const vals = TYPES.map(([, i]) => somme(us, d0, d1, i));
+  const W = largeur(el), lab = Math.min(70, W * 0.2), h = 30, gap = 12;
+  const lignes = [['Volume', vals], ['Poids', vals.map((v, i) => v * TYPES[i][2])]];
+  let s = '';
+  lignes.forEach(([titre, vs], r) => {
+    const tot = vs.reduce((a, b) => a + b, 0) || 1, y = r * (h + gap);
+    s += `<text x="${lab - 8}" y="${y + h / 2 + 4}" text-anchor="end" style="fill:var(--encre)">${titre}</text>`;
+    let x = lab;
+    vs.forEach((v, i) => {
+      const w = ((W - lab) * v) / tot;
+      if (w <= 0) return;
+      const pc = Math.round((100 * v) / tot);
+      const info = `<b>${TYPES[i][0]}</b><div class="l"><span>Tokens</span><b>${fmt(vals[i])}</b></div><div class="l"><span>Part (${titre.toLowerCase()})</span><span>${pc} %</span></div>`;
+      s += `<rect data-info="${esc(info)}" x="${x}" y="${y}" width="${Math.max(1, w - 1)}" height="${h}" rx="3" fill="${TYPES[i][3]}"/>`;
+      if (w > 40) s += `<text x="${x + 6}" y="${y + h / 2 + 4}" pointer-events="none" style="fill:#fff;font-weight:600">${pc} %</text>`;
+      x += w;
+    });
+  });
+  const H = lignes.length * (h + gap);
+  el.innerHTML = `<svg xmlns="${NS}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${s}</svg>`
+    + `<div class="c-leg">${TYPES.map(([n], i) => `<span><i class="point" style="background:${TYPES[i][3]}"></i>${n} · ${fmt(vals[i])}</span>`).join('')}</div>`;
+}
+
 // Teinte d'intensité : la couleur du compte mélangée à la surface (une seule teinte, clair → foncé).
 const NIVEAUX = [28, 48, 68, 86, 100];
 const teinte = (c, niveau) => `color-mix(in oklab, ${c} ${NIVEAUX[niveau]}%, var(--surface))`;
@@ -332,7 +371,8 @@ function chaleur(el, us, c, d0) {
 function courbeLimite(el, us) {
   const W = largeur(el), H = 200, m = { l: 40, r: 12, t: 10, b: 24 };
   const X = (j) => m.l + ((W - m.l - m.r) * j) / 7;
-  const sems = us.map((u) => [u, semaineEnCours(u)]).filter(([, sem]) => sem);
+  const sems = us.map((u) => [u, semaineA(u, semCible)]).filter(([, sem]) => sem);
+  if (!sems.length) { el.innerHTML = '<p class="vide">Pas de relevé de limite pour cette semaine.</p>'; return; }
   // Après une réinitialisation offerte, la courbe continue au-dessus de 100 % : l'axe s'allonge.
   const sommet = Math.max(100, ...sems.map(([, sem]) => Math.max(...sem.cumuls)));
   const pas = sommet > 150 ? 50 : 25;
@@ -372,7 +412,19 @@ function semaineEnCours(u) {
   const rel = D.limites.filter((r) => r.uuid === u);
   const der = rel[rel.length - 1];
   if (!der?.reset || Date.parse(der.reset) < Date.now()) return null;
-  const releves = rel.filter((r) => r.reset && Math.abs(Date.parse(r.reset) - Date.parse(der.reset)) < 3600000);
+  return semaineA(u, Date.now());
+}
+
+// La semaine de limite (d'une remise à la suivante) qui contient l'instant t.
+function semaineA(u, t) {
+  const rel = D.limites.filter((r) => r.uuid === u && r.reset);
+  const der = [...rel].reverse().find((r) => { const R = Date.parse(r.reset); return R > t && R - 7 * JOUR_MS <= t; });
+  if (!der) return null;
+  const releves = rel.filter((r) => Math.abs(Date.parse(r.reset) - Date.parse(der.reset)) < 3600000);
+  return cumulsSemaine(der, releves);
+}
+function cumulsSemaine(der0, releves) {
+  const der = releves[releves.length - 1] || der0;
   // Réinitialisation offerte en cours de semaine : le % retombe sans que la date de remise
   // change. On garde ce qui était déjà consommé pour que la courbe continue de monter.
   let decalage = 0;
@@ -409,6 +461,21 @@ function limiteParJour() {
   return res;
 }
 let LIM = {};
+let semCible = Date.now(); // instant dont on montre la semaine de limite
+
+// Barème en points : ce que pèse un token sur la limite (≈ tarif relatif).
+const BAREME = { cache: 0.1, entree: 1, ecriture: 1.25, sortie: 5 };
+const pointsHeure = (v = []) => (v[3] || 0) * BAREME.cache + (v[4] || 0) * BAREME.entree + (v[5] || 0) * BAREME.ecriture + (v[1] || 0) * BAREME.sortie;
+const pointsJour = (u, k) => val(u, k, 3) * BAREME.cache + val(u, k, 4) * BAREME.entree + val(u, k, 5) * BAREME.ecriture + val(u, k, 1) * BAREME.sortie;
+function pointsEntre(u, t0, t1) {
+  let s = 0;
+  for (const [h, v] of Object.entries(D.heures[u] || {})) {
+    const [j, hh] = h.split(' '); const t = deCle(j).getTime() + Number(hh) * 3600000;
+    if (t >= t0 && t < t1) s += pointsHeure(v);
+  }
+  return s;
+}
+function sommePoints(us, d0, d1) { let s = 0; for (let d = d0; d < d1; d = ajoute(d, 1)) for (const u of us) s += pointsJour(u, cleJ(d)); return s; }
 
 // Un jour, heure par heure : barres empilées par compte, chiffres et projets du jour.
 function detailJour(us) {
@@ -472,7 +539,8 @@ function blocLimites(us) {
       ? `<div class="tete" style="margin-top:6px"><span>Limite 5 h</span><b>${Math.round(r.p5)} %</b></div><div class="jauge"><span style="width:${Math.min(100, r.p5)}%;background:${couleur(u)};opacity:.6"></span></div><div class="pied">Remise à ${pad(new Date(r.r5).getHours())} h ${pad(new Date(r.r5).getMinutes())}</div>` : '';
     return `<div class="limite"><div class="tete"><span>${point(u)}${esc(nom(u))} · limite hebdo</span><b>${Math.round(r.pct)} %${sem.cumul > r.pct ? ` <small>(cumul ${Math.round(sem.cumul)} %)</small>` : ''}</b></div>
       <div class="jauge"><span style="width:${Math.min(100, r.pct)}%;background:${couleur(u)}"></span><em style="left:${ecoule * 100}%" title="Rythme régulier"></em></div>
-      <div class="pied">Remise ${dateLongue(reset)} à ${pad(reset.getHours())} h · ${ecart > 0 ? `${ecart} pts d'avance sur le rythme régulier` : ecart < 0 ? `${-ecart} pts de marge sous le rythme régulier` : 'pile au rythme régulier'} · relevé ${dateCourte(new Date(r.t))} ${pad(new Date(r.t).getHours())} h</div>${cinq}</div>`;
+      <div class="pied">Remise ${dateLongue(reset)} à ${pad(reset.getHours())} h · ${ecart > 0 ? `${ecart} pts d'avance sur le rythme régulier` : ecart < 0 ? `${-ecart} pts de marge sous le rythme régulier` : 'pile au rythme régulier'} · relevé ${dateCourte(new Date(r.t))} ${pad(new Date(r.t).getHours())} h</div>
+      <div class="pied">${(() => { const p = pointsEntre(u, reset - 7 * JOUR_MS, r.t); return `<b>${fmt(p)} crédits</b> cette semaine${sem.cumul >= 1 ? ` · ≈ ${fmt(p / sem.cumul)} crédits pour 1 %` : ''}`; })()}</div>${cinq}</div>`;
   }).join('');
   return html;
 }
@@ -535,11 +603,21 @@ function vueStats() {
       ${tuile('Cette semaine <small>(depuis lundi)</small>', us, lun, demain, ['sem. dernière', memeAvancee(ajoute(lun, -7), joursSemaine)])}
       ${tuile(`Ce mois <small>(${MOIS_LONGS[a.getMonth()]})</small>`, us, mois, demain, [MOIS_LONGS[moisPrec.getMonth()], memeAvancee(moisPrec, joursMois)])}
       <div class="tuile"><div class="lib">Moyenne par jour actif <small>(30 j)</small></div><div class="valeur">${fmt(actifs30 ? tot30 / actifs30 : 0)}</div><div class="detail">${actifs30} jours actifs sur 30</div></div>
+      <div class="tuile"><div class="lib">Crédits cette semaine <small>(barème)</small></div><div class="valeur">${fmt(sommePoints(us, lun, demain))} <small>crédits</small></div><div class="detail">aujourd'hui ${fmt(sommePoints(us, a, demain))} crédits</div>${us.length > 1 ? `<div class="parts">${us.map((u) => `<div>${point(u)}${esc(nom(u))} : <b>${fmt(sommePoints([u], lun, demain))}</b></div>`).join('')}</div>` : ''}</div>
       ${tuile(`Depuis le début <small>(${dateCourte(debut)} ${debut.getFullYear()})</small>`, us, debut, demain)}
     </div>
 
-    <section class="c-bloc"><div class="c-bloc-tete"><div><h2>Limites Claude</h2><p class="sous">${esc(titre)} — le petit trait sur la jauge marque le rythme régulier (100 % en fin de semaine).</p></div></div>
+    <section class="c-bloc"><div class="c-bloc-tete"><div><h2>Limites Claude</h2><p class="sous">${esc(titre)} — le petit trait sur la jauge marque le rythme régulier (100 % en fin de semaine). Clique un jour du calendrier pour voir sa semaine.</p></div>
+      <div class="nav-jour"><button class="bouton" data-semaine="-1" aria-label="Semaine précédente">‹</button><span class="sous" style="margin:0 6px">${semCible > Date.now() - 3600000 ? 'Cette semaine' : `Semaine du ${dateCourte(lundi(new Date(semCible)))}`}</span><button class="bouton" data-semaine="1" aria-label="Semaine suivante">›</button><button class="bouton" data-semaine="0">Cette semaine</button></div></div>
       <div class="rangee-2"><div class="limites">${blocLimites(us)}</div><div><div class="graphe" id="g-limite"></div>${legende(us.filter((u) => semaineEnCours(u)), false)}</div></div>
+    </section>
+
+    <section class="c-bloc"><div class="c-bloc-tete"><div><h2>Où partent les tokens</h2><p class="sous">Sur les ${plage} derniers jours. Volume = nombre de tokens ; poids = effet réel sur la limite (relu du cache ≈ ×0,1, écrit par Claude ≈ ×5).</p></div></div>
+      <div class="graphe" id="g-types"></div>
+      <div class="rangee-2">
+        <div><h2>Ce qui entre</h2><p class="sous">Contenu neuf ajouté au contexte (estimé, ≈ 4 caractères par token).</p>${legende(us, false)}<div class="graphe" id="g-entrees"></div></div>
+        <div><h2>Ce que Claude écrit</h2><p class="sous">Estimé de la même façon.</p>${legende(us, false)}<div class="graphe" id="g-sorties"></div></div>
+      </div>
     </section>
 
     <section class="c-bloc"><div class="c-bloc-tete"><div><h2>Activité par jour</h2><p class="sous">Un carré par jour sur un an ; plus il est foncé, plus il y a eu de tokens ce jour-là.</p></div></div>
@@ -572,6 +650,9 @@ function vueStats() {
 
   courbeLimite($('#g-limite'), us);
   calendrier($('#g-cal'), us, c);
+  repartition($('#g-types'), us, d0, demain);
+  barresH($('#g-entrees'), classement(us, 'entrees', d0, 9), us);
+  barresH($('#g-sorties'), classement(us, 'sorties', d0, 5), us);
   // 30 jours : une barre par jour, plus lisible qu'une courbe ; au-delà, la courbe.
   if (plage <= 30) barres($('#g-courbe'), jours.map((k) => { const d = deCle(k); const v = {}; for (const u of us) v[u] = val(u, k); return { etiquette: dateCourte(d), titre: dateLongue(d), valeurs: v, jour: k, req: us.reduce((s, u) => s + val(u, k, 2), 0) }; }), us, 240);
   else courbe($('#g-courbe'), jours, us);
@@ -730,7 +811,9 @@ $('#onglets').addEventListener('click', (e) => {
 });
 document.addEventListener('click', (e) => {
   const j = e.target.closest('[data-jour]');
-  if (j) { choisirJour(j.dataset.jour); return; }
+  if (j) { semCible = Math.min(Date.now(), deCle(j.dataset.jour).getTime() + 12 * 3600000); choisirJour(j.dataset.jour); return; }
+  const sm = e.target.closest('[data-semaine]');
+  if (sm) { const n = Number(sm.dataset.semaine); semCible = n ? Math.min(Date.now(), semCible + n * 7 * JOUR_MS) : Date.now(); const y = scrollY; afficher(); scrollTo(0, y); return; }
   const dec = e.target.closest('[data-decale]');
   if (dec) { const n = Number(dec.dataset.decale); choisirJour(cleJ(n ? ajoute(deCle(jourChoisi), n) : new Date())); return; }
   const b = e.target.closest('[data-plage]');

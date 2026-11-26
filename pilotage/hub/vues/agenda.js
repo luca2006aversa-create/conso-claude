@@ -198,15 +198,70 @@
         }).join('')}</div>`;
     },
 
+    /* ================= Détails d'un rendez-vous (clic sur un événement) ================= */
+    // Tout ce qu'on sait de l'événement ; le crayon ouvre le formulaire, la description s'écrit sur place.
+    details(ev, jour) {
+      if (!ev) return;
+      const lecture = H.enLigne, cat = this.cat(ev.categorie);
+      if (H.voletFerme) { H.voletFerme(); H.voletFerme = null; } // une fiche de tâche ouverte avant ne doit pas revenir par-dessus
+      const t = ev.tache ? (H.d.taches?.liste || []).find((x) => x.id === ev.tache) : null;
+      const liens = (txt) => esc(txt).replace(/https?:\/\/(?:[^\s<&]|&amp;)+/g, (u) => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+      const info = (icone, nom, html) => (html ? `<div class="ag-info">${H.icone(icone)}<div><small>${nom}</small><div>${html}</div></div></div>` : '');
+      const quand = `${H.dateCourte(jour || ev.date)}${ev.debut ? ` · ${ev.debut}–${ev.fin}` : ' · journée'}${ev.repete ? ` · chaque semaine${ev.jusqua ? ` jusqu'au ${H.dateCourte(ev.jusqua)}` : ''}` : ''}`;
+      const desc = ev.description || '';
+      H.volet(`<div id="ag-details">
+        <div class="ag-d-haut"><span class="puce ag-d-cat" style="--c:${G.V(cat.couleur)}">${esc(cat.nom)}</span>
+          ${lecture ? '' : `<button class="btn ag-crayon" data-crayon title="Modifier l'événement">${H.icone('crayon')}Modifier</button>`}</div>
+        <h2 class="nom">${esc(ev.titre)}</h2>
+        <div class="ag-infos">${info('horloge', 'Quand', quand)}${info('lieu', 'Lieu', esc(ev.lieu || ''))}${info('utilisateur', 'Prof', esc(ev.prof || ''))}
+          ${info('tache', 'Tâche liée', t ? `<span class="lien-t" data-tache="${t.id}">#${t.id}</span> ${esc(t.titre)}` : (ev.tache ? `#${ev.tache}` : ''))}</div>
+        <section class="ag-desc"><h3>${H.icone('texte')}Description${ev.repete ? '<small>pour toute la série</small>' : ''}${lecture ? '' : `<button class="btn petit discret" data-desc>${desc ? 'Modifier' : 'Ajouter'}</button>`}</h3>
+          <div class="ag-texte${desc ? '' : ' vide-txt'}">${desc ? liens(desc) : 'Pas encore de description.'}</div></section>
+        ${ev.note ? `<section><h3>Note</h3><div class="ag-texte">${liens(ev.note)}</div></section>` : ''}
+        ${lecture ? '' : `<section><h3>Pièces et liens<small>cours, sujets, documents</small></h3>${H.vues.taches.pieces(ev.id, ev.pieces)}</section>`}</div>`);
+      const zone = document.getElementById('ag-details');
+      // Relit les données puis redessine ce volet (après une pièce ou une description enregistrée).
+      const rafraichir = async () => { await H.recharger(true); const frais = H.d.agenda.evenements.find((y) => y.id === ev.id);
+        if (frais && document.getElementById('ag-details')) this.details(frais, jour); };
+      const envoyer = async (fichiers) => { let n = 0;
+        for (const f of fichiers) {
+          const nom = f.name && f.name !== 'image.png' ? f.name : `capture-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}.png`;
+          try { const r = await fetch(`/api/pieces/${ev.id}?nom=${encodeURIComponent(nom)}&mime=${encodeURIComponent(f.type)}`, { method: 'POST', body: f });
+            const d = await r.json(); if (!r.ok) throw new Error(d.erreur); n++; } catch (err) { H.toast(`${nom} : ${err.message}`, true); }
+        }
+        if (n) { H.toast(n > 1 ? `${n} fichiers ajoutés` : 'Fichier ajouté'); await rafraichir(); } };
+      this.coller = lecture ? null : envoyer; H.voletFerme = () => { this.coller = null; }; // Ctrl+V d'une image → pièce de l'événement
+      zone.onclick = async (e) => {
+        const c = e.target;
+        if (c.closest('[data-crayon]')) { this.formulaire(ev, jour); return; }
+        const lien = c.closest('[data-tache]'); if (lien) { H.vues.taches.ouvrir(Number(lien.dataset.tache)); return; }
+        if (c.closest('[data-desc]')) {
+          zone.querySelector('.ag-texte').outerHTML = `<textarea class="champ" name="description" rows="6" placeholder="Ce qu'il faut savoir : sujet, consignes, à préparer, liens…">${esc(desc)}</textarea>
+            <div class="boutons" style="justify-content:flex-end"><button class="btn petit" data-desc-annuler>Annuler</button><button class="btn petit p" data-desc-ok>Enregistrer</button></div>`;
+          c.closest('[data-desc]').remove(); const ta = zone.querySelector('textarea[name="description"]'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); return; }
+        if (c.closest('[data-desc-annuler]')) { this.details(ev, jour); return; }
+        if (c.closest('[data-desc-ok]')) {
+          const r = await H.essayer(() => H.api('PUT', `hub/agenda/${encodeURIComponent(ev.id)}`, { description: zone.querySelector('textarea[name="description"]').value }), 'Description enregistrée');
+          if (r) await rafraichir(); return; }
+        const sup = c.closest('[data-piece-suppr]');
+        if (sup) { if (confirm('Retirer cette pièce jointe ?') && await H.essayer(() => H.api('DELETE', `pieces/${ev.id}/${sup.dataset.pieceSuppr}`))) await rafraichir(); }
+      };
+      zone.onchange = async (e) => { if (!e.target.matches('[data-fichier]')) return; const f = [...e.target.files]; e.target.value = ''; await envoyer(f); };
+      zone.onsubmit = async (e) => {
+        if (!e.target.classList.contains('lien-form')) return; e.preventDefault();
+        const url = e.target.querySelector('input').value.trim(); if (!url) return;
+        if (await H.essayer(() => H.api('POST', `pieces/${ev.id}`, { url, nom: '' }), 'Lien ajouté')) await rafraichir();
+      };
+      zone.ondragover = (e) => { const p = e.target.closest('.pieces'); if (p && e.dataTransfer.types.includes('Files')) { e.preventDefault(); p.classList.add('survol'); } };
+      zone.ondragleave = (e) => { if (!e.relatedTarget?.closest?.('.pieces')) zone.querySelector('.pieces')?.classList.remove('survol'); };
+      zone.ondrop = async (e) => { const p = e.target.closest('.pieces'); if (!p || !e.dataTransfer.files.length) return; e.preventDefault(); p.classList.remove('survol'); await envoyer([...e.dataTransfer.files]); };
+    },
+
     /* ================= Formulaire d'un rendez-vous ================= */
     formulaire(ev = {}, jour) {
       const neuf = !ev.id, cats = H.d.agenda.categories, lecture = H.enLigne;
       const taches = H.d.taches.liste.filter((t) => !['fait', 'abandon'].includes(t.statut)).sort((x, y) => y.id - x.id);
-      if (lecture) {
-        H.volet(`<h2 class="nom">${esc(ev.titre)}</h2><div><span class="puce">${esc(this.cat(ev.categorie).nom)}</span>${ev.repete ? ' <span class="puce">chaque semaine</span>' : ''}</div>
-          <dl class="infos" style="margin-top:12px"><dt>Quand</dt><dd>${H.dateCourte(jour || ev.date)}${ev.debut ? ` · ${ev.debut}–${ev.fin}` : ' · journée'}</dd>${ev.lieu ? `<dt>Lieu</dt><dd>${esc(ev.lieu)}</dd>` : ''}${ev.tache ? `<dt>Tâche</dt><dd>#${ev.tache}</dd>` : ''}${ev.note ? `<dt>Note</dt><dd style="white-space:pre-wrap">${esc(ev.note)}</dd>` : ''}</dl>`);
-        return;
-      }
+      if (lecture) return this.details(ev, jour);
       H.volet(`<form id="ag-form"><h2 class="nom">${neuf ? 'Nouveau rendez-vous' : 'Rendez-vous'}</h2>
         <input class="champ" name="titre" required placeholder="Quoi ?" value="${esc(ev.titre || '')}" style="width:100%;font-size:17px;padding:9px 12px;margin:6px 0 12px">
         <div class="ag-cats">${cats.map((c) => `<label style="--c:${G.V(c.couleur)}"><input type="radio" name="categorie" value="${c.id}"${(ev.categorie || 'rdv') === c.id ? ' checked' : ''}><span>${esc(c.nom)}</span></label>`).join('')}</div>
@@ -214,12 +269,14 @@
           <label>Début<input class="champ" type="time" name="debut" step="300" value="${ev.debut || ''}"></label><label>Fin<input class="champ" type="time" name="fin" step="300" value="${ev.fin || ''}"></label></div>
         <div class="boutons"><span class="sous">Durée :</span>${[30, 60, 90, 120, 180].map((m) => `<button type="button" class="btn petit" data-duree="${m}">${m < 60 ? `${m} min` : `${m / 60} h`.replace('.5', ' h 30').replace(' h h', ' h')}</button>`).join('')}<button type="button" class="btn petit discret" data-duree="0">journée</button></div>
         <div class="champs-2"><label>Lieu<input class="champ" name="lieu" value="${esc(ev.lieu || '')}" placeholder="adresse, salle, visio…"></label>
-          <label>Tâche liée<select class="champ" name="tache"><option value="">—</option>${taches.map((t) => `<option value="${t.id}"${ev.tache === t.id ? ' selected' : ''}>#${t.id} ${esc(t.titre.slice(0, 60))}</option>`).join('')}</select></label></div>
+          <label>Prof<input class="champ" name="prof" value="${esc(ev.prof || '')}" placeholder="qui donne le cours, avec qui…"></label></div>
+        <div class="champs-2" style="grid-template-columns:1fr"><label>Tâche liée<select class="champ" name="tache"><option value="">—</option>${taches.map((t) => `<option value="${t.id}"${ev.tache === t.id ? ' selected' : ''}>#${t.id} ${esc(t.titre.slice(0, 60))}</option>`).join('')}</select></label></div>
         <div class="ligne-form"><label class="sous" style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="repete"${ev.repete ? ' checked' : ''}> chaque semaine (emploi du temps)</label>
           <label class="sous" style="display:flex;gap:6px;align-items:center">jusqu'au <input class="champ" type="date" name="jusqua" value="${ev.jusqua || ''}"></label></div>
-        <textarea class="champ" name="note" rows="3" placeholder="Note (à préparer, à apporter…)" style="width:100%;margin-top:10px">${esc(ev.note || '')}</textarea>
+        <textarea class="champ" name="description" rows="4" placeholder="Description : sujet, consignes, liens…" style="width:100%;margin-top:10px">${esc(ev.description || '')}</textarea>
+        <textarea class="champ" name="note" rows="2" placeholder="Note (à préparer, à apporter…)" style="width:100%;margin-top:8px">${esc(ev.note || '')}</textarea>
         <div class="boutons" style="justify-content:space-between;margin-top:14px"><span style="display:flex;gap:6px">${neuf ? '' : `<button type="button" class="btn discret" data-suppr="tout">Supprimer${ev.repete ? ' la série' : ''}</button>${ev.repete && jour ? '<button type="button" class="btn discret" data-suppr="jour">Seulement ce jour</button>' : ''}`}</span>
-          <button class="btn p" type="submit">${neuf ? 'Ajouter' : 'Enregistrer'}</button></div></form>`);
+          <span style="display:flex;gap:6px">${neuf ? '' : '<button type="button" class="btn" data-retour>Annuler</button>'}<button class="btn p" type="submit">${neuf ? 'Ajouter' : 'Enregistrer'}</button></span></div></form>`);
       const f = document.getElementById('ag-form');
       if (neuf) f.titre.focus();
       f.querySelectorAll('[data-duree]').forEach((b) => { b.onclick = () => { const m = Number(b.dataset.duree);
@@ -227,12 +284,15 @@
       f.onsubmit = async (e2) => {
         e2.preventDefault();
         const corps = { titre: f.titre.value, categorie: f.categorie.value, date: f.date.value, debut: f.debut.value, fin: f.fin.value, lieu: f.lieu.value,
-          tache: f.tache.value || null, repete: f.repete.checked ? 'semaine' : '', jusqua: f.jusqua.value, note: f.note.value };
+          tache: f.tache.value || null, repete: f.repete.checked ? 'semaine' : '', jusqua: f.jusqua.value, note: f.note.value, description: f.description.value, prof: f.prof.value };
         // Pour une série, on garde son premier jour (changer le jour d'une série la déplace entière).
         if (!neuf && ev.repete && jour && corps.date === jour) corps.date = ev.date;
         const r = await H.essayer(() => (neuf ? H.api('POST', 'hub/agenda', corps) : H.api('PUT', `hub/agenda/${encodeURIComponent(ev.id)}`, corps)), neuf ? 'Ajouté à l\'agenda' : 'Enregistré');
-        if (r) { H.fermerVolet(); await H.recharger(); }
+        if (!r) return;
+        if (neuf) { H.fermerVolet(); await H.recharger(); return; }
+        await H.recharger(true); H.rendre(true); this.details(H.d.agenda.evenements.find((y) => y.id === ev.id), jour); // retour aux détails, à jour
       };
+      f.querySelector('[data-retour]')?.addEventListener('click', () => this.details(ev, jour));
       f.querySelectorAll('[data-suppr]').forEach((b) => { b.onclick = async () => {
         const seul = b.dataset.suppr === 'jour';
         if (!confirm(seul ? 'Retirer ce jour seulement ?' : 'Supprimer ce rendez-vous ?')) return;
@@ -258,7 +318,7 @@
         if (etroit()) e.depuis3 = k ? plus(e.depuis3 || H.jour(), 3 * k) : H.jour(); else e.debut = k ? plus(e.debut, 7 * k) : H.lundi(H.jour()); H.rendre(); }; });
       vue.querySelectorAll('[data-mois]').forEach((b) => { b.onclick = () => { const k = Number(b.dataset.mois);
         if (!k) e.mois = H.mois(); else { const d = new Date(`${e.mois}-15T12:00:00`); d.setMonth(d.getMonth() + k); e.mois = H.mois(d); } H.rendre(); }; });
-      vue.querySelectorAll('[data-ev]').forEach((x) => { x.onclick = (ev) => { ev.stopPropagation(); this.formulaire(H.d.agenda.evenements.find((y) => y.id === x.dataset.ev), x.dataset.jour); }; });
+      vue.querySelectorAll('[data-ev]').forEach((x) => { x.onclick = (ev) => { ev.stopPropagation(); this.details(H.d.agenda.evenements.find((y) => y.id === x.dataset.ev), x.dataset.jour); }; });
       vue.querySelectorAll('[data-repere]').forEach((x) => { x.onclick = (ev) => { ev.stopPropagation(); this.ouvrirRepere(x.dataset.repere, x.dataset.rid); }; });
       vue.querySelectorAll('[data-defiler]').forEach((x) => { x.onclick = () => document.getElementById(x.dataset.defiler)?.scrollIntoView({ block: 'start' }); });
       vue.querySelectorAll('[data-tache]').forEach((x) => { x.onclick = () => H.vues.taches.ouvrir(Number(x.dataset.tache)); });
@@ -273,5 +333,10 @@
       vue.querySelectorAll('.ag-bande').forEach((b) => { b.ondblclick = (ev) => { if (ev.target === b) this.nouveau(b.dataset.jour); }; });
     },
   };
-  void V;
+  // Coller une image pendant que les détails d'un événement sont ouverts l'ajoute à ses pièces.
+  document.addEventListener('paste', (e) => {
+    const fichiers = [...(e.clipboardData?.files || [])];
+    if (!fichiers.length || !V.coller || !document.getElementById('ag-details')) return;
+    e.preventDefault(); V.coller(fichiers);
+  });
 })();
